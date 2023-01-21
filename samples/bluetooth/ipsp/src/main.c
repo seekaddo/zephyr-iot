@@ -183,6 +183,7 @@ static void udp_received(struct net_context *context,
 	sa_family_t family = net_pkt_family(pkt);
 	static char dbg[MAX_DBG_PRINT + 1];
 	int ret;
+	LOG_INF("-------------Incoming UDP");
 
 	snprintf(dbg, MAX_DBG_PRINT, "UDP IPv%c",
 		 family == AF_INET6 ? '6' : '4');
