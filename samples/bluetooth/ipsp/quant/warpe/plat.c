@@ -360,8 +360,12 @@ uint64_t __attribute__((no_instrument_function)) w_now(const clockid_t
     return clock_gettime_nsec_np(clock);
 #else
     struct timespec now;
-    uint64_t nl = k_uptime_get();
-    now = (struct timespec){nl, (long)(nl)};
+    uint32_t uptime = k_uptime_get();
+    now.tv_sec = uptime / sys_clock_hw_cycles_per_sec();
+    now.tv_nsec = (uptime % sys_clock_hw_cycles_per_sec ()) *
+		 (NSEC_PER_SEC / sys_clock_hw_cycles_per_sec ());
+    //uint64_t nl = k_uptime_get();
+    //now = (struct timespec){nl, (long)(nl)};
     //clock_gettime(clock, &now);
     return (uint64_t)now.tv_sec * NS_PER_S + (uint64_t)now.tv_nsec;
 #endif
@@ -384,6 +388,8 @@ void w_nanosleep(const uint64_t
                  ns)
 {
 
+    //k_timeout_t timeout = {(int64_t)(ns + (1000000000 / sys_clock_hw_cycles_per_sec()) - 1) / (1000000000 / sys_clock_hw_cycles_per_sec())};
+    //k_sleep(timeout);
     //nanosleep(&(struct timespec){ns / NS_PER_S, (long)(ns % NS_PER_S)}, 0);
     k_sleep( K_TIMEOUT_ABS_TICKS(k_ns_to_ticks_ceil64(ns)) );
 
@@ -401,9 +407,11 @@ void w_init_rand(void)
     // random_init(0x5678); or use clock_time() then use it with random_rand()
     // init state for w_rand()
 #if !defined(FUZZING) && !defined(PARTICLE) && !defined(RIOT_VERSION)
-    struct timeval now;
-    uint64_t nl = k_uptime_get();
-    now = (struct timeval){nl, (long)(nl/10000)};
+    struct timespec now;
+    uint32_t uptime = k_uptime_get();
+    now.tv_sec = uptime / sys_clock_hw_cycles_per_sec();
+    now.tv_nsec = (uptime % sys_clock_hw_cycles_per_sec ()) *
+		  (NSEC_PER_SEC / sys_clock_hw_cycles_per_sec ());
     //gettimeofday(&now, 0);
     const uint64_t seed = fnv1a_64(&now, sizeof(now));
     kr_srand_r(&w_rand_state, seed);

@@ -36,6 +36,8 @@
 //#include <sys/time.h>
 #include <zephyr/posix/sys/time.h>
 #include <zephyr/posix/time.h>
+#include <zephyr/posix/time.h>
+#include <zephyr/kernel.h>
 
 #if defined(DSTACK)
 #include <sys/param.h>
@@ -201,11 +203,15 @@ static void
     DTHREAD_LOCK;
 
     static struct timeval last = {-1, -1};
-    struct timeval now;
+    //struct timeval now;
     struct timeval dur;
     struct timeval diff;
-    uint64_t nl = k_uptime_get();
-    now = (struct timeval){nl, (long)(nl)};
+    struct timeval now;
+    uint32_t uptime = k_uptime_get();
+    now.tv_sec = uptime / sys_clock_hw_cycles_per_sec();
+    now.tv_usec = (uptime % sys_clock_hw_cycles_per_sec ()) *
+		  (USEC_PER_SEC / sys_clock_hw_cycles_per_sec ());
+
    // gettimeofday(&now, 0);
     timersub(&now, &util_epoch, &dur);
     timersub(&now, &last, &diff);
@@ -297,8 +303,13 @@ void util_rwarn(time_t * const rt0,
                 const char * const fmt,
                 ...)
 {
-    uint64_t nl = k_uptime_get();
-    struct timeval rts = {nl, nl};
+    struct timeval rts;
+    uint32_t uptime = k_uptime_get();
+    rts.tv_sec = uptime / sys_clock_hw_cycles_per_sec();
+    rts.tv_usec = (uptime % sys_clock_hw_cycles_per_sec()) *
+		  (USEC_PER_SEC / sys_clock_hw_cycles_per_sec());
+
+    //struct timeval rts = {nl, nl};
     //gettimeofday(&rts, 0);
     if (*rt0 != rts.tv_sec) {
         *rt0 = rts.tv_sec;
@@ -353,10 +364,13 @@ void util_hexdump(const void * const ptr,
 #ifndef PARTICLE
     DTHREAD_LOCK;
 #ifndef RIOT_VERSION
-    struct timeval now;
+    //struct timeval now;
     struct timeval elapsed;
-    uint64_t nl = k_uptime_get();
-    now = (struct timeval){nl, (long)(nl)};
+    struct timeval now;
+    uint32_t uptime = k_uptime_get();
+    now.tv_sec = uptime / sys_clock_hw_cycles_per_sec();
+    now.tv_usec = (uptime % sys_clock_hw_cycles_per_sec()) *
+		  (USEC_PER_SEC / sys_clock_hw_cycles_per_sec());
     //gettimeofday(&now, 0);
     timersub(&now, &util_epoch, &elapsed);
 
