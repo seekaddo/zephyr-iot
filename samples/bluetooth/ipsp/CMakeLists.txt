@@ -24,7 +24,6 @@ else()
             )
 
     target_include_directories(app PRIVATE "${QUANT_INC}")
-
     #set (BUIDFLAG )
     #set (BUIDFLAG1 ) # -D'alloca(x)=(void*)&x')
     #    -std=c11 -Os -fstack-usage -foptimize-strlen -ffast-math)
