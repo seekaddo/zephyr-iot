@@ -57,6 +57,7 @@
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/socket.h>
 #include <zephyr/posix/time.h>
+#include <zephyr/kernel.h>
 #endif
 
 #if defined(__linux__)
@@ -101,6 +102,7 @@ static krng_t w_rand_state;
 /// @param[out] mac   A buffer of at least ETH_LEN bytes.
 /// @param[in]  i     A network interface.
 ///
+#if 0
 void plat_get_mac(struct eth_addr * const mac, const struct ifaddrs * const i)
 {
 #if defined(__linux__)
@@ -112,7 +114,7 @@ void plat_get_mac(struct eth_addr * const mac, const struct ifaddrs * const i)
     if_get_lladdr(iface, &hw_addr);
     memcpy(mac, hw_addr.sll_addr, ETH_LEN);
 #elif !defined(RIOT_VERSION)
-    memcpy(mac, LLADDR((struct sockaddr_dl *)(void *)i->ifa_addr), ETH_LEN);
+    //memcpy(mac, LLADDR((struct sockaddr_dl *)(void *)i->ifa_addr), ETH_LEN);
 #endif
 }
 
@@ -123,6 +125,7 @@ void plat_get_mac(struct eth_addr * const mac, const struct ifaddrs * const i)
 ///
 /// @return     The MTU of @p i.
 ///
+
 uint16_t plat_get_mtu(const struct ifaddrs * i) // todo: contiki-ng
 {
 #if defined(PARTICLE)
@@ -162,6 +165,7 @@ uint16_t plat_get_mtu(const struct ifaddrs * i) // todo: contiki-ng
 ///
 /// @return     Link speed of interface @p i.
 ///
+
 uint32_t plat_get_mbps(const struct ifaddrs * i)
 {
     //todo:dEE use the default speed here
@@ -213,6 +217,7 @@ uint32_t plat_get_mbps(const struct ifaddrs * i)
     return ethtool_cmd_speed(&edata);
 #endif
 }
+
 
 
 /// Return the link status of network interface @p i.
@@ -323,7 +328,7 @@ done:
     strncpy(name, "unknown", name_len);
 #endif
 }
-
+#endif
 
 //const char *
 //eth_ntoa(const struct eth_addr * const addr, char * const buf, const size_t len)
@@ -355,7 +360,9 @@ uint64_t __attribute__((no_instrument_function)) w_now(const clockid_t
     return clock_gettime_nsec_np(clock);
 #else
     struct timespec now;
-    clock_gettime(clock, &now);
+    uint64_t nl = k_uptime_get();
+    now = (struct timespec){nl, (long)(nl)};
+    //clock_gettime(clock, &now);
     return (uint64_t)now.tv_sec * NS_PER_S + (uint64_t)now.tv_nsec;
 #endif
 #endif
@@ -376,13 +383,9 @@ void w_nanosleep(const uint64_t
 #endif
                  ns)
 {
-#if defined(PARTICLE)
-    HAL_Delay_Microseconds(NS_TO_US(ns));
-#elif defined(RIOT_VERSION)
-    xtimer_nanosleep(ns);
-#elif !defined(FUZZING)
-    nanosleep(&(struct timespec){ns / NS_PER_S, (long)(ns % NS_PER_S)}, 0);
-#endif
+
+    //nanosleep(&(struct timespec){ns / NS_PER_S, (long)(ns % NS_PER_S)}, 0);
+    k_sleep( K_TIMEOUT_ABS_TICKS(k_ns_to_ticks_ceil64(ns)) );
 
     //todo:DEE add the contiki-ng timer sleep here
 }
@@ -399,7 +402,9 @@ void w_init_rand(void)
     // init state for w_rand()
 #if !defined(FUZZING) && !defined(PARTICLE) && !defined(RIOT_VERSION)
     struct timeval now;
-    gettimeofday(&now, 0);
+    uint64_t nl = k_uptime_get();
+    now = (struct timeval){nl, (long)(nl/10000)};
+    //gettimeofday(&now, 0);
     const uint64_t seed = fnv1a_64(&now, sizeof(now));
     kr_srand_r(&w_rand_state, seed);
 #elif defined(FUZZING)

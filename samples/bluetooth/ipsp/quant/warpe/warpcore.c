@@ -83,7 +83,7 @@ dump_bufs(const char * const label, const struct w_iov_sq * const q)
         if ((size_t)pos >= sizeof(line))
             break;
     }
-    warn(DBG, "%s: %" PRIu " bufs: %s", label, w_iov_sq_cnt(q), line);
+    LOG_DBG( "%s: %" PRIu " bufs: %s", label, w_iov_sq_cnt(q), line);
     ensure((size_t)pos >= sizeof(line) || cnt == w_iov_sq_cnt(q),
            "cnt mismatch");
 }
@@ -91,6 +91,8 @@ dump_bufs(const char * const label, const struct w_iov_sq * const q)
 #define dump_bufs(...)
 #endif
 
+#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+LOG_MODULE_REGISTER(warpcore);
 
 extern char *net_sprint_addr(sa_family_t af, const void *addr);
 
@@ -115,7 +117,7 @@ w_alloc_iov(struct w_engine * const w,
             const uint16_t off)
 {
 #ifdef DEBUG_BUFFERS
-    warn(DBG, "w_alloc_iov len %u, off %u", len, off);
+    LOG_DBG( "w_alloc_iov len %u, off %u", len, off);
 #endif
     assure(af == AF_INET || af == AF_INET6, "unknown address family");
     struct w_iov * const v = w_alloc_iov_base(w);
@@ -124,7 +126,7 @@ w_alloc_iov(struct w_engine * const w,
         v->buf += off + hdr_space;
         v->len = len ? len : v->len - (off + hdr_space);
 #ifdef DEBUG_BUFFERS
-        warn(DBG, "alloc w_iov off %u len %u", (uint16_t)(v->buf - v->base),
+        LOG_DBG( "alloc w_iov off %u len %u", (uint16_t)(v->buf - v->base),
              v->len);
 #endif
     }
@@ -158,7 +160,7 @@ void w_alloc_len(struct w_engine * const w,
                  const uint16_t off)
 {
 #ifdef DEBUG_BUFFERS
-    warn(DBG, "w_alloc_len qlen %" PRIu ", len %u, off %u", qlen, len, off);
+    LOG_DBG( "w_alloc_len qlen %" PRIu ", len %u, off %u", qlen, len, off);
     assure(sq_empty(q), "q not empty");
 #endif
     uint_t needed = qlen;
@@ -170,7 +172,7 @@ void w_alloc_len(struct w_engine * const w,
             needed -= v->len;
         else {
 #ifdef DEBUG_BUFFERS
-            warn(DBG, "adjust last (%u) to %" PRIu, v->idx, needed);
+            LOG_DBG( "adjust last (%u) to %" PRIu, v->idx, needed);
 #endif
             v->len = (uint16_t)needed;
             needed = 0;
@@ -207,7 +209,7 @@ void w_alloc_cnt(struct w_engine * const w,
                  const uint16_t off)
 {
 #ifdef DEBUG_BUFFERS
-    warn(DBG, "w_alloc_cnt count %" PRIu ", len %u, off %u", count, len, off);
+    LOG_DBG( "w_alloc_cnt count %" PRIu ", len %u, off %u", count, len, off);
     assure(sq_empty(q), "q not empty");
 #endif
     for (uint_t needed = 0; likely(needed < count); needed++) {
@@ -253,7 +255,7 @@ uint_t w_iov_sq_len(const struct w_iov_sq * const q)
 int w_connect(struct w_sock * const s, const struct sockaddr * const peer)
 {
     if (unlikely(w_connected(s))) {
-        warn(ERR, "socket already connected");
+        LOG_ERR( "socket already connected");
         return EADDRINUSE;
     }
 
@@ -272,13 +274,13 @@ int w_connect(struct w_sock * const s, const struct sockaddr * const peer)
     //if (unlikely(e))
         //memset(&s->ws_rem, 0, sizeof(s->ws_rem));
 
-    warn(e ? ERR : DBG, "socket %sconnected to %s:%d %s%s%s", e ? "not " : "",
+    LOG_WRN( "socket %sconnected to %s:%d %s%s%s", e ? "not " : "",
          wi_ntop(&s->ws_raddr), ntohs(ws_str(s->ws_rport)), e ? "(" : "",
          strerror(e), e ? ")" : "");
 
     return e;
 }
-char *wi_ntop(struct sockaddr *addr)
+char *wi_ntop( const struct sockaddr *addr)
 {
     return net_sprint_addr(AF_INET6,(uint8_t *)&net_sin6(addr)->sin6_addr);
 }
@@ -319,12 +321,12 @@ struct w_sock * w_bind(struct w_engine * const w,
     sq_init(&s->iv);
 
     if (unlikely(backend_bind(s, opt) != 0)) {
-        warn(ERR, "w_bind failed on %s:%u (%s)", wi_ntop(&s->ws_laddr),
+        LOG_ERR( "w_bind failed on %s:%u (%s)", wi_ntop(&s->ws_laddr),
 	     ntohs(ws_str(s->ws_lport)), "--");
         goto fail;
     }
 
-    warn(NTE, "socket bound to %s:%d", wi_ntop(&s->ws_laddr),
+    LOG_INF( "socket bound to %s:%d", wi_ntop(&s->ws_laddr),
 	 ntohs(ws_str(s->ws_lport)) );
 
     return s;
@@ -357,7 +359,7 @@ void w_close(struct w_sock * const s)
 ///
 void w_cleanup(struct w_engine * const w)
 {
-    warn(NTE, "warpcore shutting down");
+    LOG_INF( "warpcore shutting down");
     backend_cleanup(w);
 #if !defined(PARTICLE) && !defined(RIOT_VERSION)
     sl_remove(&engines, w, w_engine, next);
@@ -434,7 +436,7 @@ struct w_engine * w_init(const char * const ifname,
     sl_foreach (e, &engines, next)
         if (strncmp(ifname, e->ifname, IFNAMSIZ) == 0 &&
             e->is_loopback == false) {
-            warn(ERR, "can only have one warpcore engine active on %s", ifname);
+            LOG_ERR( "can only have one warpcore engine active on %s", ifname);
             return 0;
         }
 #endif
@@ -446,7 +448,7 @@ struct w_engine * w_init(const char * const ifname,
     //todo: remove the loop here
     while ((addr_cnt = backend_addr_cnt()) == 0) {
         // sleep for a bit, so we don't burn the CPU when link is down
-        warn(WRN,
+        LOG_WRN(
              "%s: could not obtain required interface information, retrying",
              ifname);
         w_nanosleep(1 * NS_PER_S);
@@ -472,13 +474,13 @@ struct w_engine * w_init(const char * const ifname,
 
 #ifndef NDEBUG
     // put the link local address here
-    warn(NTE, "%s MAC addr %s, MTU %d, speed %" PRIu32 "G", w->ifname,
+    LOG_INF( "%s MAC addr %s, MTU %d, speed %" PRIu32 "G", w->ifname,
          "fd00:00"/*eth_ntoa(&w->mac, eth_tmp, ETH_STRLEN)*/, w->mtu, w->mbps / 1000);
 #if  0
     for (uint16_t idx = 0; idx < w->addr_cnt; idx++) {
         struct w_ifaddr * const ia = &w->ifaddr[idx];
 
-        warn(NTE, "%s IPv%d addr %s/%u", w->ifname,
+        LOG_INF( "%s IPv%d addr %s/%u", w->ifname,
              ia->addr.af == 2 ? 4 : 6, w_ntop(&ia->addr, ip_tmp),
              ia->prefix);
 
@@ -491,7 +493,7 @@ struct w_engine * w_init(const char * const ifname,
     sl_insert_head(&engines, w, next);
 #endif
 
-    warn(INF, "%s/%s (%s) %s using %" PRIu " %u-byte bufs on %s", warpcore_name,
+    LOG_INF( "%s/%s (%s) %s using %" PRIu " %u-byte bufs on %s", warpcore_name,
          w->backend_name, w->backend_variant, warpcore_version,
          w_iov_sq_cnt(&w->iov), w->mtu, w->ifname);
     return w;
@@ -529,7 +531,7 @@ void w_free(struct w_iov_sq * const q)
     struct w_iov * v;
     sq_foreach (v, q, next) {
 #ifdef DEBUG_BUFFERS
-        warn(DBG, "w_free idx %" PRIu32, v->idx);
+        LOG_DBG( "w_free idx %" PRIu32, v->idx);
 #endif
         ASAN_POISON_MEMORY_REGION(v->base, max_buf_len(w));
     }
@@ -547,7 +549,7 @@ void w_free(struct w_iov_sq * const q)
 void __attribute__((no_instrument_function)) w_free_iov(struct w_iov * const v)
 {
 #ifdef DEBUG_BUFFERS
-    warn(DBG, "w_free_iov idx %" PRIu32, v->idx);
+    LOG_DBG( "w_free_iov idx %" PRIu32, v->idx);
 #endif
     assure(sq_next(v, next) == 0,
            "idx %" PRIu32 " still linked to idx %" PRIu32, v->idx,
@@ -646,7 +648,7 @@ struct w_iov * w_alloc_iov_base(struct w_engine * const w)
         reinit_iov(v);
         ASAN_UNPOISON_MEMORY_REGION(v->base, v->len);
 #ifdef DEBUG_BUFFERS
-        warn(DBG, "w_alloc_iov_base idx %" PRIu32, v ? v->idx : UINT32_MAX);
+        LOG_DBG( "w_alloc_iov_base idx %" PRIu32, v ? v->idx : UINT32_MAX);
 #endif
     }
     return v;

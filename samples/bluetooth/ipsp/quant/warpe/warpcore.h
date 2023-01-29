@@ -29,7 +29,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 //#include <netinet/in.h>
 //#include <stdint.h>
 //#include <sys/param.h>
@@ -57,9 +59,14 @@ extern "C" {
 #ifdef CONTIKI_NG_LE
 //#include "net/ipv6/uiplib.h"
 //#include "net/app-layer/quic-en/quic-endpoint.h"
+#include <zephyr/net/net_pkt.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/socket.h>
 #include <zephyr/posix/time.h>
+#include <zephyr/posix/sys/time.h>
+#ifndef CLOCK_MONOTONIC_RAW
+#define CLOCK_MONOTONIC_RAW 5 // zephyr only
+#endif
 #endif
 
 
@@ -187,7 +194,7 @@ struct w_socktuple {
     uint32_t scope_id;        ///< IPv6 scope ID.
 };
 
-char *wi_ntop(struct sockaddr *addr);
+char *wi_ntop(const struct sockaddr *addr);
 
 
 //extern khint_t __attribute__((nonnull))
@@ -232,6 +239,27 @@ struct w_socktup
   uint16_t scope_id;
 };
 
+struct qmcon {
+
+  struct w_engine *w;
+  const char *  req;
+  const char *  peer;
+  struct q_conn *  c;
+  struct q_stream * s ;
+  struct sockaddr  p_addr;
+  uint16_t qrcnt;
+  //uint16_t clean;
+  //quic_udp_callback cl_callback;
+};
+
+struct net_rec {
+  struct sockaddr src_addr;
+  //uint16_t src_port;
+  struct net_context *cntx;
+  struct net_pkt *pkt;
+  void *user_data;
+};
+
 /// A warpcore backend engine.
 ///
 struct w_engine {
@@ -250,6 +278,8 @@ struct w_engine {
     char drvname[IFNAMSIZ];       ///< Name of the driver of this interface.
     const char * backend_name;    ///< Name of the backend in @p b.
     const char * backend_variant; ///< Name of the backend variant in @p b.
+    //struct net_context *u6_contxt; // udp context used for receiving and sending net pkt
+    struct net_rec *u6_rec;
 
     /// Pointer to generic user data (not used by warpcore.)
     void * data;
@@ -353,6 +383,7 @@ struct w_iov {
     /// on a disconnected w_sock. Ignored on TX on a connected w_sock.
     //struct w_sockaddr saddr;
     struct sockaddr saddr; // endpoint to rx (server address -- remote addrss)
+    //uint16_t sport; // source/rx port
 
     uint8_t * base;       ///< Absolute start of buffer.
     uint8_t * buf;        ///< Start of payload data.
@@ -379,13 +410,18 @@ struct w_iov {
 //#define wv_ip6 saddr.addr.ip6
 #define wv_addr saddr.addr
 #endif
-#define wv_port saddr.port
-#define wv_af   saddr.af
-#define wv_addr saddr.ipaddr
+//#define wv_port saddr
+#define wv_af   saddr
+//#define wv_addr saddr
+#define ws_strprt(ad) net_sin6(&ad)->sin6_port
+#define ws_straf(ad) net_sin6(&ad)->sin6_family
+#define ws_stradr(ad) net_sin6(&ad)->sin6_addr
+
+#define get_ttl(pkt) pkt->ipv6_hop_limit
 
 #define to_endpoint(a,b) \
-  memcpy((a).ipaddr.u8,(b).addr.ip6, sizeof((a).ipaddr.u8)); \
-  (a).port = (b).port;
+  memcpy((uint8_t *)&net_sin6(&a)->sin6_addr, (b).addr.ip6, sizeof((b).addr.ip6)); \
+  net_sin6(&a)->sin6_port = (b).port;
 
 /// Return the index of w_iov @p v.
 ///
@@ -548,6 +584,12 @@ extern uint_t w_iov_sq_len(const struct w_iov_sq * const q);
 
 extern void __attribute__((nonnull))
 w_rx(struct w_sock * const s, struct w_iov_sq * const i);
+
+extern uint16_t __attribute__((nonnull))
+recvfr(struct net_rec *u6_rec, uint8_t *b);
+
+extern int __attribute__((nonnull(1,2,3)))
+quic_sendto(struct net_rec *u6rec, struct sockaddr *dst_addr, uint8_t *buf, uint16_t len);
 
 extern void __attribute__((nonnull)) w_nic_tx(struct w_engine * const w);
 

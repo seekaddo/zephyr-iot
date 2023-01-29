@@ -32,6 +32,9 @@
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/socket.h>
 #include <zephyr/posix/time.h>
+#include <zephyr/posix/sys/time.h>
+#include <stdlib.h>
+
 #endif
 #include "picotls.h"
 #if PICOTLS_USE_DTRACE
@@ -148,6 +151,30 @@ struct st_ptls_certificate_request_t {
     ptls_iovec_t context;
     struct st_ptls_signature_algorithms_t signature_algorithms;
 };
+
+static int posix_memalign(void **memptr, size_t alignment, size_t size)
+{
+    void *ptr;
+
+    /* Check that the alignment is a power of 2 and at least sizeof(void*) */
+    if ((alignment & (alignment - 1)) || alignment < sizeof(void*)) {
+	    return EINVAL;
+    }
+
+    /* Allocate memory using malloc */
+    ptr = malloc(size + alignment);
+    if (!ptr) {
+	    return ENOMEM;
+    }
+
+    /* Align the memory */
+    *memptr = (void*)(((size_t)ptr + alignment - 1) & ~(alignment - 1));
+
+    /* Store the original pointer just before the aligned memory */
+    *((void**)(*memptr) - 1) = ptr;
+
+    return 0;
+}
 
 struct st_ptls_t {
     /**
@@ -601,6 +628,7 @@ int ptls_buffer__adjust_asn1_blocksize(ptls_buffer_t *buf, size_t body_size)
 {
     fprintf(stderr, "unimplemented\n");
     abort();
+    return -1;
 }
 
 int ptls_buffer_push_asn1_ubigint(ptls_buffer_t *buf, const void *bignum, size_t size)
@@ -5601,16 +5629,14 @@ ptls_esni_secret_t *ptls_get_esni_secret(ptls_t *ctx)
  */
 int ptls_server_name_is_ipaddr(const char *name)
 {
-//#ifdef AF_INET
-//    struct sockaddr_in sin;
-//    if (inet_pton(AF_INET, name, &sin) == 1)
-//        return 1;
-//#endif
-#ifdef AF_INET6
-    struct sockaddr_in6 sin6;
-    if (inet_pton(AF_INET6, name, &sin6) == 1)
-        return 1;
-#endif
+    // #ifdef AF_INET
+    //     struct sockaddr_in sin;
+    //     if (inet_pton(AF_INET, name, &sin) == 1)
+    //         return 1;
+    // #endif
+    struct in6_addr sin6;
+    if (net_addr_pton(AF_INET6, name, &sin6) == 0)
+	return 1;
     return 0;
 }
 

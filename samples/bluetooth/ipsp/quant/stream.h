@@ -123,8 +123,7 @@ struct q_stream {
 #define strm_to_state(s, new_state)                                            \
     do {                                                                       \
         if ((s)->id >= 0) {                                                    \
-            warn(                                                              \
-                DBG,                                                           \
+            LOG_DBG(                                                              \
                 "%s%s conn %s strm " FMT_SID " (%s, %s) state %s -> " YEL      \
                 "%s" NRM,                                                      \
                 (s)->state == (new_state) ? BLD RED "useless transition: " NRM \

@@ -146,7 +146,7 @@ typedef struct if_list if_list;
 
 struct ifaddrs;
 struct eth_addr;
-
+#if 0
 extern void __attribute__((nonnull))
 plat_get_mac(struct eth_addr * const mac, const struct ifaddrs * const i);
 
@@ -163,6 +163,7 @@ extern void __attribute__((nonnull))
 plat_get_iface_driver(const struct ifaddrs * const i,
                       char * const name,
                       const size_t name_len);
+#endif
 
 //extern const char * __attribute__((nonnull))
 //eth_ntoa(const struct eth_addr * const addr,

@@ -173,6 +173,7 @@ static void inv25519(gf o, const gf i)
 
 void cf_curve25519_mul(uint8_t *q, const uint8_t *n, const uint8_t *p)
 {
+  //use this
   uint8_t z[32];
   gf x;
   gf a, b, c, d, e, f;

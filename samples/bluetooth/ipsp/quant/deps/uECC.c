@@ -189,14 +189,14 @@ static uECC_RNG_Function g_rng_function = &default_RNG;
 static uECC_RNG_Function g_rng_function = 0;
 #endif
 
-void uECC_set_rng(uECC_RNG_Function rng_function) {
-    g_rng_function = rng_function;
-}
+//void uECC_set_rng(uECC_RNG_Function rng_function) {
+//    g_rng_function = rng_function;
+//}
 
-uECC_RNG_Function uECC_get_rng(void) {
-    return g_rng_function;
-}
-
+//uECC_RNG_Function uECC_get_rng(void) {
+//    return g_rng_function;
+//}
+#if 0
 int uECC_curve_private_key_size(uECC_Curve curve) {
     return BITS_TO_BYTES(curve->num_n_bits);
 }
@@ -204,6 +204,7 @@ int uECC_curve_private_key_size(uECC_Curve curve) {
 int uECC_curve_public_key_size(uECC_Curve curve) {
     return 2 * curve->num_bytes;
 }
+#endif
 
 #if !asm_clear
 uECC_VLI_API void uECC_vli_clear(uECC_word_t *vli, wordcount_t num_words) {
@@ -913,7 +914,7 @@ static uECC_word_t regularize_k(const uECC_word_t * const k,
     uECC_vli_add(k1, k0, curve->n, num_n_words);
     return carry;
 }
-
+#if 0
 static uECC_word_t EccPoint_compute_public_key(uECC_word_t *result,
                                                uECC_word_t *private_key,
                                                uECC_Curve curve) {
@@ -933,6 +934,7 @@ static uECC_word_t EccPoint_compute_public_key(uECC_word_t *result,
     }
     return 1;
 }
+#endif
 
 #if uECC_WORD_SIZE == 1
 
@@ -1002,7 +1004,7 @@ uECC_VLI_API int uECC_generate_random_int(uECC_word_t *random,
     }
     return 0;
 }
-
+#if 0
 int uECC_make_key(uint8_t *public_key,
                   uint8_t *private_key,
                   uECC_Curve curve) {
@@ -1032,6 +1034,7 @@ int uECC_make_key(uint8_t *public_key,
     }
     return 0;
 }
+
 
 int uECC_shared_secret(const uint8_t *public_key,
                        const uint8_t *private_key,
@@ -1077,6 +1080,7 @@ int uECC_shared_secret(const uint8_t *public_key,
 #endif
     return !EccPoint_isZero(_public, curve);
 }
+#endif
 
 #if uECC_SUPPORT_COMPRESSED_POINT
 void uECC_compress(const uint8_t *public_key, uint8_t *compressed, uECC_Curve curve) {
@@ -1117,6 +1121,7 @@ void uECC_decompress(const uint8_t *compressed, uint8_t *public_key, uECC_Curve 
 }
 #endif /* uECC_SUPPORT_COMPRESSED_POINT */
 
+#if 0
 int uECC_valid_point(const uECC_word_t *point, uECC_Curve curve) {
     uECC_word_t tmp1[uECC_MAX_WORDS];
     uECC_word_t tmp2[uECC_MAX_WORDS];
@@ -1189,6 +1194,8 @@ int uECC_compute_public_key(const uint8_t *private_key, uint8_t *public_key, uEC
 #endif
     return 1;
 }
+#endif
+
 
 
 /* -------- ECDSA code -------- */

@@ -183,7 +183,7 @@ extern bool __attribute__((nonnull))
 q_is_stream_closed(const struct q_stream * const s);
 
 extern void __attribute__((nonnull))
-quic_transx(const char * const req, const struct in6_addr  * const peer );
+quic_transx(const char * const req, const char* peer );
 
 extern bool __attribute__((nonnull))
 q_peer_closed_stream(const struct q_stream * const s);
@@ -213,7 +213,7 @@ extern void __attribute__((nonnull))
 q_info(struct q_conn * const c, struct q_conn_info * const ci);
 
 extern int __attribute__((nonnull)) q_conn_af(const struct q_conn * const c);
-
+extern void quic_init_Wegine(struct net_context *u6_ctxt);
 #ifdef __cplusplus
 }
 #endif

@@ -53,18 +53,20 @@
 #include "stream.h"
 #include "tls.h"
 
+#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+LOG_MODULE_REGISTER(pkt);
+
 
 #ifndef NDEBUG
-
+extern char *net_sprint_addr(sa_family_t af, const void *addr);
 void log_pkt(const char * const dir,
              const struct w_iov * const v,
              const uint8_t * const tok,
              const uint16_t tok_len,
              const uint8_t * const rit)
 {
-    char ip[IP_STRLEN];
-    wi_ntop(&v->saddr.ipaddr, ip);
-    const uint16_t port = uip_ntohs(v->saddr.port);
+    char *ip = net_sprint_addr(AF_INET6,(uint8_t *)&net_sin6(&v->saddr)->sin6_addr);
+    const uint16_t port = ntohs(net_sin6(&v->saddr)->sin6_port);
     const struct pkt_meta * const m = &meta(v);
     const char * const pts = pkt_type_str(m->hdr.flags, &m->hdr.vers);
 
@@ -72,8 +74,8 @@ void log_pkt(const char * const dir,
     mk_cid_str(NTE, &m->hdr.scid, scid_str);
     const char * const tok_str = tok_len ? tok_str(tok, tok_len) : "";
     const char * const rit_str = rit ? rit_str(rit) : "";
-    const char * const lbr = v->wv_af == AF_INET6 ? "[" : "";
-    const char * const rbr = v->wv_af == AF_INET6 ? "]" : "";
+    const char * const lbr = (ws_straf(v->wv_af) == AF_INET6) ? "[" : "";
+    const char * const rbr = (ws_straf(v->wv_af) == AF_INET6) ? "]" : "";
 
     if (*dir == 'R') {
         static const char * const ecn_str[] = {[ECN_NOT] = "",
@@ -84,13 +86,13 @@ void log_pkt(const char * const dir,
         const char * const ecn = ecn_mark ? " ecn=" : "";
         if (is_lh(m->hdr.flags)) {
             if (m->hdr.vers == 0)
-                twarn(NTE,
+                LOG_INF(
                       BLD BLU "RX" NRM " from=%s%s%s:%u len=%u%s%s 0x%02x=" BLU
                               "%s " NRM "vers=0x%0" PRIx32 " dcid=%s scid=%s",
                       lbr, ip, rbr, port, v->len, ecn, ecn_str[ecn_mark],
                       m->hdr.flags, pts, m->hdr.vers, dcid_str, scid_str);
             else if (m->hdr.type == LH_RTRY)
-                twarn(NTE,
+                LOG_INF(
                       BLD BLU "RX" NRM " from=%s%s%s:%u len=%u%s%s 0x%02x=" BLU
                               "%s " NRM "vers=0x%0" PRIx32
                               " dcid=%s scid=%s tok=%s rit=%s",
@@ -98,7 +100,7 @@ void log_pkt(const char * const dir,
                       m->hdr.flags, pts, m->hdr.vers, dcid_str, scid_str,
                       tok_str, rit_str);
             else if (m->hdr.type == LH_INIT)
-                twarn(NTE,
+                LOG_INF(
                       BLD BLU "RX" NRM " from=%s%s%s:%u len=%u%s%s 0x%02x=" BLU
                               "%s " NRM "vers=0x%0" PRIx32
                               " dcid=%s scid=%s%s%s len=%u nr=" BLU
@@ -107,7 +109,7 @@ void log_pkt(const char * const dir,
                       m->hdr.flags, pts, m->hdr.vers, dcid_str, scid_str,
                       tok_len ? " tok=" : "", tok_str, m->hdr.len, m->hdr.nr);
             else
-                twarn(NTE,
+                LOG_INF(
                       BLD BLU "RX" NRM " from=%s%s%s:%u len=%u%s%s 0x%02x=" BLU
                               "%s " NRM "vers=0x%0" PRIx32
                               " dcid=%s scid=%s len=%u nr=" BLU "%" PRIu NRM,
@@ -115,7 +117,7 @@ void log_pkt(const char * const dir,
                       m->hdr.flags, pts, m->hdr.vers, dcid_str, scid_str,
                       m->hdr.len, m->hdr.nr);
         } else
-            twarn(NTE,
+            LOG_INF(
                   BLD BLU "RX" NRM " from=%s%s%s:%u len=%u%s%s 0x%02x=" BLU
                           "%s " NRM "kyph=%u spin=%u dcid=%s nr=" BLU
                           "%" PRIu NRM,
@@ -127,20 +129,20 @@ void log_pkt(const char * const dir,
         // on TX, v->len is not yet final/correct, so don't print it
         if (is_lh(m->hdr.flags)) {
             if (m->hdr.vers == 0)
-                twarn(NTE,
+                LOG_INF(
                       BLD GRN "TX" NRM " to=%s%s%s:%u 0x%02x=" GRN "%s " NRM
                               "vers=0x%0" PRIx32 " dcid=%s scid=%s",
                       lbr, ip, rbr, port, m->hdr.flags, pts, m->hdr.vers,
                       dcid_str, scid_str);
             else if (m->hdr.type == LH_RTRY)
-                twarn(NTE,
+                LOG_INF(
                       BLD GRN "TX" NRM " to=%s%s%s:%u 0x%02x=" GRN "%s " NRM
                               "vers=0x%0" PRIx32
                               " dcid=%s scid=%s tok=%s rit=%s",
                       lbr, ip, rbr, port, m->hdr.flags, pts, m->hdr.vers,
                       dcid_str, scid_str, tok_str, rit_str);
             else if (m->hdr.type == LH_INIT)
-                twarn(NTE,
+                LOG_INF(
                       BLD GRN "TX" NRM " to=%s%s%s:%u 0x%02x=" GRN "%s " NRM
                               "vers=0x%0" PRIx32
                               " dcid=%s scid=%s%s%s len=%u nr=" GRN
@@ -149,14 +151,14 @@ void log_pkt(const char * const dir,
                       dcid_str, scid_str, tok_len ? " tok=" : "", tok_str,
                       m->hdr.len, m->hdr.nr);
             else
-                twarn(NTE,
+                LOG_INF(
                       BLD GRN "TX" NRM " to=%s%s%s:%u 0x%02x=" GRN "%s " NRM
                               "vers=0x%0" PRIx32
                               " dcid=%s scid=%s len=%u nr=" GRN "%" PRIu NRM,
                       lbr, ip, rbr, port, m->hdr.flags, pts, m->hdr.vers,
                       dcid_str, scid_str, m->hdr.len, m->hdr.nr);
         } else
-            twarn(NTE,
+            LOG_INF(
                   BLD GRN "TX" NRM " to=%s%s%s:%u 0x%02x=" GRN "%s " NRM
                           "kyph=%u spin=%u dcid=%s nr=" GRN "%" PRIu NRM,
                   lbr, ip, rbr, port, m->hdr.flags, pts,
@@ -171,7 +173,7 @@ void validate_pmtu(struct q_conn * const c)
 {
     c->rec.max_ups =
         MIN(w_max_udp_payload(c->sock), (uint16_t)c->tp_peer.max_ups);
-    warn(NTE, "PMTU %u validated", c->rec.max_ups);
+    LOG_INF( "PMTU %u validated", c->rec.max_ups);
     c->rec.max_ups_af = c->peer.addr.af;
     c->pmtud_pkt = UINT16_MAX;
 }
@@ -220,7 +222,7 @@ coalesce(struct w_iov_sq * const q, const uint16_t max_ups, const bool do_pmtud)
             struct w_iov * const next_next = sq_next(next, next);
             // do we have space? do the packet types make sense to coalesce?
             if (v->len + next->len > max_ups) {
-                warn(DBG,
+                LOG_DBG(
                      "cannot coalesce %u-byte %s pkt behind %u-byte %s pkt, "
                      "limit %u",
                      next->len, next_type_str, v->len, outer_type_str, max_ups);
@@ -228,37 +230,37 @@ coalesce(struct w_iov_sq * const q, const uint16_t max_ups, const bool do_pmtud)
                 prev = next;
             } else if (can_coalesce_pkt_types(pkt_type(inner_flags),
                                               pkt_type(*next->buf)) == false) {
-                warn(DBG, "cannot coalesce %u-byte %s pkt behind inner %s pkt",
+                LOG_DBG( "cannot coalesce %u-byte %s pkt behind inner %s pkt",
                      next->len, next_type_str, inner_type_str);
                 prev = next;
             } else if (skipped_types & pkt_type(*next->buf)) {
-                warn(DBG,
+                LOG_DBG(
                      "cannot coalesce %u-byte %s pkt behind inner %s pkt, "
                      "skipped one already",
                      next->len, next_type_str, inner_type_str);
                 prev = next;
             } else if (skipped_types && skipped_types < pkt_type(*next->buf)) {
-                warn(DBG,
+                LOG_DBG(
                      "cannot coalesce %u-byte %s pkt behind inner %s pkt, "
                      "skipped 0x%02x already",
                      next->len, next_type_str, inner_type_str, skipped_types);
                 prev = next;
             } else if (pkt_type(*next->buf) == SH && do_pmtud) {
-                warn(DBG,
+                LOG_DBG(
                      "won't coalesce %u-byte %s pkt behind inner %s pkt, "
                      "need to do PMTUD",
                      next->len, next_type_str, inner_type_str);
                 prev = next;
             } else if (pkt_type(*next->buf) == SH &&
                        pkt_type(*v->buf) == LH_INIT) {
-                warn(DBG,
+                LOG_DBG(
                      "won't coalesce %u-byte %s pkt behind inner %s pkt, "
                      "need to pad Initial",
                      next->len, next_type_str, inner_type_str);
                 prev = next;
             } else {
                 // we can coalesce
-                warn(INF,
+                LOG_INF(
                      "coalescing %u-byte %s pkt behind inner %u-byte %s pkt "
                      "(outermost %s)",
                      next->len, next_type_str, v->len, inner_type_str,
@@ -277,14 +279,14 @@ coalesce(struct w_iov_sq * const q, const uint16_t max_ups, const bool do_pmtud)
         }
 
         if (do_pmtud && pmtud_pkt == UINT16_MAX && v->len < max_ups) {
-            warn(NTE,
+            LOG_INF(
                  "testing PMTU %u with %s pkt %u using %u bytes rand padding",
                  max_ups, pkt_type_str(*v->buf, v->buf + 1),
                  v->user_data & 0x3fff, max_ups - v->len);
             pad_with_rand(v, max_ups);
             pmtud_pkt = v->user_data;
         } else if (pkt_type(*v->buf) == LH_INIT && v->len < MIN_INI_LEN) {
-            warn(NTE, "padding %s to %u by coalescing %u bytes rand data",
+            LOG_INF( "padding %s to %u by coalescing %u bytes rand data",
                  pkt_type_str(*v->buf, v->buf + 1), MIN_INI_LEN,
                  MIN_INI_LEN - v->len);
             pad_with_rand(v, MIN_INI_LEN);
@@ -293,7 +295,7 @@ coalesce(struct w_iov_sq * const q, const uint16_t max_ups, const bool do_pmtud)
         v = sq_next(v, next);
 #ifdef DEBUG_EXTRA
         if (v)
-            warn(DBG, "coalescing txq next");
+            LOG_DBG( "coalescing txq next");
 #endif
     }
 
@@ -553,7 +555,7 @@ bool enc_pkt(struct q_stream * const s,
     // sanity check
     if (unlikely(m->hdr.hdr_len >=
                  DATA_OFFSET + (is_lh(m->hdr.flags) ? c->tok_len + 16 : 0))) {
-        warn(ERR, "pkt header %u >= offset %u", m->hdr.hdr_len,
+        LOG_ERR( "pkt header %u >= offset %u", m->hdr.hdr_len,
              DATA_OFFSET + (is_lh(m->hdr.flags) ? c->tok_len + 16 : 0));
         return false;
     }
@@ -570,7 +572,7 @@ bool enc_pkt(struct q_stream * const s,
     if (needs_ack(pn) != no_ack &&
         unlikely(enc_ack_frame(ci, &pos, v->buf, end, m, pn) == false)) {
         // couldn't encode (all of) the ACK, schedule pure ACK TX
-        warn(DBG, "not enough space for ACK frame, scheduling ACK timeout");
+        LOG_DBG( "not enough space for ACK frame, scheduling ACK timeout");
         timeouts_add(ped(c->w)->wheel, &c->ack_alarm, 0);
     }
 
@@ -658,7 +660,7 @@ tx:;
     // alloc directly from warpcore for crypto TX - no need for metadata alloc
     struct w_iov * const xv = w_alloc_iov(c->w, q_conn_af(c), 0, 0);
     if (unlikely(xv == 0)) {
-        warn(WRN, "could not alloc iov");
+        LOG_WRN( "could not alloc iov");
         return false;
     }
 
@@ -785,7 +787,7 @@ bool dec_pkt_hdr_beginning(struct w_iov * const xv,
         dec1_chk(&m->hdr.dcid.len, &pos, end);
 
         if (unlikely(m->hdr.dcid.len > CID_LEN_MAX)) {
-            warn(DBG, "illegal v1 dcid len %u", m->hdr.dcid.len);
+            LOG_DBG( "illegal v1 dcid len %u", m->hdr.dcid.len);
             m->hdr.dcid.len = 0;
             return false;
         }
@@ -795,7 +797,7 @@ bool dec_pkt_hdr_beginning(struct w_iov * const xv,
 
         dec1_chk(&m->hdr.scid.len, &pos, end);
         if (unlikely(m->hdr.scid.len > CID_LEN_MAX)) {
-            warn(DBG, "illegal v1 scid len %u", m->hdr.scid.len);
+            LOG_DBG( "illegal v1 scid len %u", m->hdr.scid.len);
             m->hdr.dcid.len = 0;
             return false;
         }
@@ -817,13 +819,13 @@ bool dec_pkt_hdr_beginning(struct w_iov * const xv,
             *tok_len = (uint16_t)tmp;
             if (is_clnt && *tok_len) {
                 // server initial pkts must have no tokens
-                warn(ERR, "tok (len %u) present in serv initial", *tok_len);
+                LOG_ERR( "tok (len %u) present in serv initial", *tok_len);
                 return false;
             }
         } else if (m->hdr.type == LH_RTRY) {
             *tok_len = (uint16_t)(end - pos);
             if (unlikely(*tok_len <= RIT_LEN)) {
-                warn(DBG, "tok_len %u too short", *tok_len);
+                LOG_DBG( "tok_len %u too short", *tok_len);
                 return false;
             }
             *tok_len -= RIT_LEN;
@@ -833,7 +835,7 @@ bool dec_pkt_hdr_beginning(struct w_iov * const xv,
             if (unlikely(*tok_len >= MAX_TOK_LEN ||
                          *tok_len + m->hdr.hdr_len > xv->len)) {
                 // corrupt token len
-                warn(DBG, "tok_len %u invalid (max %u)", *tok_len, MAX_TOK_LEN);
+                LOG_DBG( "tok_len %u invalid (max %u)", *tok_len, MAX_TOK_LEN);
                 return false;
             }
             decb_chk(tok, &pos, end, *tok_len);
@@ -847,7 +849,7 @@ bool dec_pkt_hdr_beginning(struct w_iov * const xv,
             m->hdr.len = (uint16_t)tmp;
             // sanity check len
             if (unlikely(m->hdr.len + m->hdr.hdr_len > xv->len)) {
-                warn(DBG, "len %u invalid", m->hdr.len);
+                LOG_DBG( "len %u invalid", m->hdr.len);
                 return false;
             }
         }
@@ -872,14 +874,14 @@ done:
             // allocate new w_iov for coalesced packet and copy it over
             struct w_iov * const dup = dup_iov(xv, 0, pkt_len);
             if (unlikely(dup == 0)) {
-                warn(WRN, "could not alloc iov");
+                LOG_WRN( "could not alloc iov");
                 return false;
             }
             // adjust length of first packet
             xv->len = pkt_len;
             // rx() has already removed xv from x, so just insert dup at head
             sq_insert_head(x, dup, next);
-            warn(DBG, "split out coalesced %u-byte %s pkt", dup->len,
+            LOG_DBG( "split out coalesced %u-byte %s pkt", dup->len,
                  pkt_type_str(*dup->buf, &dup->buf[1]));
         }
     }
@@ -918,7 +920,7 @@ bool xor_hp(struct w_iov * const xv,
         xv->buf[pkt_nr_pos + i] ^= mask[1 + i];
 
 #ifdef DEBUG_PROT
-    warn(DBG, "%s HP over [0, %u..%u]", enc_mask ? "apply" : "undo", pkt_nr_pos,
+    LOG_DBG( "%s HP over [0, %u..%u]", enc_mask ? "apply" : "undo", pkt_nr_pos,
          pkt_nr_pos + pnl - 1);
 #endif
 
@@ -1025,7 +1027,7 @@ struct q_conn * is_srt(const struct w_iov * const xv
 
     if (c && c->state != conn_drng) {
         m->is_reset = true;
-        warn(DBG, "stateless reset for %s conn %s", conn_type(c),
+        LOG_DBG( "stateless reset for %s conn %s", conn_type(c),
              cid_str(c->scid));
         conn_to_state(c, conn_drng);
         enter_closing(c);
@@ -1063,7 +1065,7 @@ bool dec_pkt_hdr_remainder(struct w_iov * const xv,
             // this is a peer-initiated key phase flip
             cs = ptls_get_cipher(c->tls.t);
             if (unlikely(cs == 0)) {
-                warn(ERR, "cannot obtain cipher suite");
+                LOG_ERR( "cannot obtain cipher suite");
                 return false;
             }
             // save the old keying material in case we gotta rollback
@@ -1125,7 +1127,7 @@ bool dec_pkt_hdr_remainder(struct w_iov * const xv,
                      id->local_choice == true && id->len >= 8)
 #endif
         ) {
-            warn(DBG, "clnt path validated");
+            LOG_DBG( "clnt path validated");
             abandon_pn(&c->pns[pn_init]);
             c->path_val_win = UINT_T_MAX;
             c->needs_tx = true; // in case we need to RTX
@@ -1151,7 +1153,7 @@ bool dec_pkt_hdr_remainder(struct w_iov * const xv,
 check_srt:
     if (unlikely(did_key_flip)) {
 #ifdef DEBUG_PROT
-        warn(DBG, "crypto fail, undoing key flip %u -> %u",
+        LOG_DBG( "crypto fail, undoing key flip %u -> %u",
              c->pns[pn_data].data.in_kyph, prev_kyph);
 #endif
         c->pns[pn_data].data.out_kyph = c->pns[pn_data].data.in_kyph =

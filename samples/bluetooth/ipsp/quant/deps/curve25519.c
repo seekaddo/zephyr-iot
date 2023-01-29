@@ -25,5 +25,5 @@ void cf_curve25519_mul_base(uint8_t out[32], const uint8_t scalar[32])
   crypto_scalarmult_curve25519_base(out, scalar);
 }
 #else
-#include "extra/curve25519.tweetnacl.c"
+//#include "extra/curve25519.tweetnacl.c"
 #endif

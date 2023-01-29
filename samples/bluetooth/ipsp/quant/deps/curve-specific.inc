@@ -768,7 +768,7 @@ static const struct uECC_Curve_t curve_secp256r1 = {
 #endif
 };
 
-uECC_Curve uECC_secp256r1(void) { return &curve_secp256r1; }
+//uECC_Curve uECC_secp256r1(void) { return &curve_secp256r1; }
 
 
 #if (uECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp256r1)

@@ -38,6 +38,9 @@
 #include "conn.h"
 #endif
 
+#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+LOG_MODULE_REGISTER(cid);
+
 char __cid_str[CID_STR_LEN];
 
 void init_cids(struct cids * const ids)
@@ -143,7 +146,7 @@ struct cid * cid_ins(struct cids * const ids, const struct cid * const id)
             i = sl_first(&ids->avl);
             assure(i, "have cid");
         } else {
-            warn(ERR, "cannot ins cid %s", cid_str(id));
+            LOG_ERR( "cannot ins cid %s", cid_str(id));
             return 0;
         }
     }

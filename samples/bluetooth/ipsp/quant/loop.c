@@ -43,6 +43,8 @@
 #define TIMEOUT_DISABLE_INTERVALS
 //#include "deps/timeout.c" // NOLINT
 
+#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+LOG_MODULE_REGISTER(loop);
 
 func_ptr api_func = 0;
 void * api_conn = 0;
@@ -75,7 +77,7 @@ void __attribute__((nonnull(1))) loop_run(struct w_engine * const w,
     api_conn = c;
     api_strm = s;
     break_loop = false;
-    warn(DBG,"---------Socket loop RECVMG-----------------");
+    LOG_DBG("---------Socket loop RECVMG-----------------");
 
     while (likely(break_loop == false)) {
 	    timeouts_update(ped(w)->wheel, w_now(CLOCK_MONOTONIC_RAW));
@@ -107,5 +109,5 @@ void __attribute__((nonnull(1))) loop_run(struct w_engine * const w,
 
     api_func = 0;
     api_conn = api_strm = 0;
-    warn(DBG,"---------Socket loop done-----------------");
+    LOG_DBG("---------Socket loop done-----------------");
 }

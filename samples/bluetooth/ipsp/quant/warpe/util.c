@@ -34,7 +34,8 @@
 #include <stdlib.h>
 #include <string.h>
 //#include <sys/time.h>
-#include <time.h>
+#include <zephyr/posix/sys/time.h>
+#include <zephyr/posix/time.h>
 
 #if defined(DSTACK)
 #include <sys/param.h>
@@ -150,60 +151,11 @@ static struct timeval util_epoch;
 
 
 #if !defined(PARTICLE) && !defined(RIOT_VERSION)
-/// Constructor function to initialize the debug framework before main()
-/// executes.
-///
-/// @param[in]  argc  Same argc as main().
-/// @param      argv  Same argv as main().
-///
-static void __attribute__((constructor))
-premain(const int argc __attribute__((unused)),
-        char * const argv[]
-#ifndef HAVE_BACKTRACE
-        __attribute__((unused))
-#endif
-#ifdef __FreeBSD__
-        __attribute__((unused))
-#endif
-)
-{
-    // Get the current time
-    gettimeofday(&util_epoch, 0);
 
-#ifdef HAVE_BACKTRACE
-    // Remember executable name (musl doesn't pass argv, and FreeBSD crashes on
-    // accessing it)
-    util_executable =
-#ifndef __FreeBSD__
-        argv ? argv[0] :
-#endif
-             0;
-#endif
 
-#ifdef DTHREADED
-    // Initialize a recursive logging lock
-    pthread_mutexattr_t attr;
-    ensure(pthread_mutexattr_init(&attr) == 0,
-           "could not initialize mutex attr");
-    ensure(pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE) == 0,
-           "could not set mutex attr");
-    ensure(pthread_mutex_init(&util_lock, &attr) == 0,
-           "could not initialize mutex");
-    ensure(pthread_mutexattr_destroy(&attr) == 0,
-           "could not destroy mutex attr");
 
-    // Remember the ID of the main thread
-    util_master = pthread_self();
-#endif
-
-#if !defined(NDEBUG) && defined(DCOMPONENT)
-    // Initialize the regular expression used for restricting debug output
-    ensure(regcomp(&util_comp, DCOMPONENT,
-                   REG_EXTENDED | REG_ICASE | REG_NOSUB) == 0,
-           "may not be a valid regexp: %s", DCOMPONENT);
-#endif
-}
-
+#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+LOG_MODULE_REGISTER(util);
 
 /// Destructor function to clean up after the debug framework, before the
 /// program exits.
@@ -252,7 +204,9 @@ static void
     struct timeval now;
     struct timeval dur;
     struct timeval diff;
-    gettimeofday(&now, 0);
+    uint64_t nl = k_uptime_get();
+    now = (struct timeval){nl, (long)(nl)};
+   // gettimeofday(&now, 0);
     timersub(&now, &util_epoch, &dur);
     timersub(&now, &last, &diff);
 
@@ -283,7 +237,7 @@ static void
     vfprintf(stderr, fmt, ap);
 //#pragma clang diagnostic pop
     fputc('\n', stderr);
-    fflush(stderr);
+    //fflush(stderr);
     // w_nanosleep(50 * NS_PER_MS);
     DTHREAD_UNLOCK;
 
@@ -343,8 +297,9 @@ void util_rwarn(time_t * const rt0,
                 const char * const fmt,
                 ...)
 {
-    struct timeval rts = {0, 0};
-    gettimeofday(&rts, 0);
+    uint64_t nl = k_uptime_get();
+    struct timeval rts = {nl, nl};
+    //gettimeofday(&rts, 0);
     if (*rt0 != rts.tv_sec) {
         *rt0 = rts.tv_sec;
         *rcnt = 0;
@@ -370,92 +325,12 @@ void util_die(const char * const func,
               const char * const fmt,
               ...)
 {
-#if !defined(PARTICLE)
-    va_list ap;
-    va_start(ap, fmt);
-    const int e = errno;
-#if !defined(RIOT_VERSION)
-    DTHREAD_LOCK;
-    struct timeval now = {0, 0};
-    struct timeval dur = {0, 0};
-    gettimeofday(&now, 0);
-    timersub(&now, &util_epoch, &dur);
-    fprintf(stderr, DTHREAD_ID_IND(BMAG) WHT BLD "%ld.%03ld   ", DTHREAD_ID,
-            (long)(dur.tv_sec % 1000), // NOLINT
-            (long)(dur.tv_usec / 1000) // NOLINT
-    );
-#endif
-    fprintf(stderr, "%s %s:%u ABORT: ", func, file, line);
-//NOADD
-//#pragma clang diagnostic push
-//#pragma clang diagnostic ignored "-Wformat-nonliteral"
-    vfprintf(stderr, fmt, ap);
-//#pragma clang diagnostic pop
-    fprintf(stderr, " %serrno %d = %s%s" NRM "\n", (e ? "[" : ""), e,
-            (e ? strerror(e) : ""), (e ? "]" : ""));
 
-#ifdef HAVE_BACKTRACE
-    if (util_executable) {
-        void * bt_buf[128];
-        const int n = backtrace(bt_buf, sizeof(bt_buf));
-        char ** const bt_sym = backtrace_symbols(bt_buf, n);
-        for (int j = 0; j < n; j++) {
-            Dl_info dli;
-            dladdr(bt_buf[j], &dli);
-            bool translated = false;
-
-            // on some platforms, dli_fname is an absolute path
-            if (strlen(dli.dli_fname) > strlen(util_executable))
-                // only compare final path components
-                dli.dli_fname +=
-                    strlen(dli.dli_fname) - strlen(util_executable);
-
-            if (strcmp(util_executable, dli.dli_fname) == 0) {
-                char cmd[8192];
-#ifdef __APPLE__
-                snprintf(cmd, sizeof(cmd),
-                         "atos -fullPath -o %s -l %p %p 2> /dev/null",
-                         util_executable, dli.dli_fbase, bt_buf[j]);
-#else
-                snprintf(cmd, sizeof(cmd),
-                         "addr2line -C -f -i -p -e %s %p 2> /dev/null",
-                         util_executable,
-                         (void *)((char *)bt_buf[j] - (char *)dli.dli_fbase));
-#endif
-                FILE * const fp = popen(cmd, "r"); // NOLINT
-                char info[8192];
-                while (fgets(info, sizeof(info), fp)) {
-                    translated = true;
-                    fprintf(stderr, DTIMESTAMP_GAP BLU "%s" NRM, info);
-                }
-                pclose(fp);
-            }
-
-            if (translated == false)
-                fprintf(stderr, DTIMESTAMP_GAP "%s\n", bt_sym[j]);
-        }
-        free(bt_sym);
-    }
-#endif
-
-    fflush(stderr);
-    va_end(ap);
-    DTHREAD_UNLOCK;
+    LOG_ERR("%s %s:%u ABORT: ", func, file, line);
     w_nanosleep(1 * NS_PER_S);
-
-#else
-
 #ifndef NDEBUG
-    va_list ap;
-    va_start(ap, fmt);
-    util_warn_valist(CRT, false, func, file, line, fmt, ap);
-    va_end(ap);
     w_nanosleep(1 * NS_PER_S);
 #endif
-    panic_(NotUsedPanicCode, 0, HAL_Delay_Microseconds);
-
-#endif
-
     abort();
 }
 
@@ -480,46 +355,48 @@ void util_hexdump(const void * const ptr,
 #ifndef RIOT_VERSION
     struct timeval now;
     struct timeval elapsed;
-    gettimeofday(&now, 0);
+    uint64_t nl = k_uptime_get();
+    now = (struct timeval){nl, (long)(nl)};
+    //gettimeofday(&now, 0);
     timersub(&now, &util_epoch, &elapsed);
 
-    hexlog(DTHREAD_ID_IND(NRM) "%ld.%03lld " BWHT " " NRM MAG " %s" BLK " " BLU
+    LOG_ERR(DTHREAD_ID_IND(NRM) "%lld.%03lld " BWHT " " NRM MAG " %s" BLK " " BLU
                                "%s:%u " NRM,
            DTHREAD_ID, elapsed.tv_sec % 1000,
            (long long)(elapsed.tv_usec / 1000), func, file, line);
 #endif
 #endif
 
-    hexlog("hex-dumping %lu byte%s of %s from %p\n", (unsigned long)len,
+    LOG_ERR("hex-dumping %lu byte%s of %s from %p\n", (unsigned long)len,
            plural(len), ptr_name, ptr);
 
     const uint8_t * const buf = ptr;
     for (size_t i = 0; i < len; i += 16) {
 #if !defined(PARTICLE) && !defined(RIOT_VERSION)
-        hexlog(DTHREAD_ID_IND(NRM) "%ld.%03lld " BWHT " " NRM " " BLU,
+	LOG_ERR(DTHREAD_ID_IND(NRM) "%lld.%03lld " BWHT " " NRM " " BLU,
                DTHREAD_ID, elapsed.tv_sec % 1000,
                (long long)(elapsed.tv_usec / 1000));
 #endif
-        hexlog("0x%04lx:  " NRM, (unsigned long)i);
+	LOG_ERR("0x%04lx:  " NRM, (unsigned long)i);
 
         for (size_t j = 0; j < 16; j++) {
             if (i + j < len)
-                hexlog("%02x", buf[i + j]);
+		    LOG_ERR("%02x", buf[i + j]);
             else
-                hexlog("  ");
+		LOG_ERR("  ");
             if (j % 2)
-                hexlog(" ");
+		LOG_ERR(" ");
         }
-        hexlog(" " GRN);
+	LOG_ERR(" " GRN);
         for (size_t j = 0; j < 16; j++) {
             if (i + j < len)
-                hexlog("%c", isprint(buf[i + j]) ? buf[i + j] : '.');
+		LOG_ERR("%c", isprint(buf[i + j]) ? buf[i + j] : '.');
         }
-        hexlog(NRM "\n");
+	LOG_ERR(NRM "\n");
     }
 
 #ifndef PARTICLE
-    fflush(stderr);
+    //fflush(stderr);
     DTHREAD_UNLOCK;
 #endif
 }

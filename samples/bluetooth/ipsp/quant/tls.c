@@ -107,7 +107,7 @@ void ptls_minicrypto_random_bytes(void * buf, size_t len)
 }
 
 
-static int uecc_rng(uint8_t * dest, unsigned size)
+static int uecc_rng_e(uint8_t * dest, unsigned size)
 {
     ptls_minicrypto_random_bytes(dest, size);
     return 1;
@@ -160,6 +160,9 @@ static const char * const ptls_err_str[] = {
 };
 #endif
 
+
+#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+LOG_MODULE_REGISTER(tls);
 
 struct tls_ticket {
 #if !defined(PARTICLE) && !defined(RIOT_VERSION)
@@ -297,7 +300,7 @@ static int setup_cipher(ptls_cipher_context_t ** hp_ctx,
     }
 
 #ifdef DEBUG_PROT
-    warn(NTE, "aead-secret: %s, hp-key: %s",
+    LOG_INF( "aead-secret: %s, hp-key: %s",
          hex2str(secret, hash->digest_size,
                  (char[hex_str_len(PTLS_MAX_DIGEST_SIZE)]){""},
                  hex_str_len(PTLS_MAX_DIGEST_SIZE)),
@@ -392,16 +395,16 @@ on_ch(ptls_on_client_hello_t * const self __attribute__((unused)),
 {
     if (params->server_name.len) {
         // TODO verify the SNI instead of accepting whatever the client sent
-        warn(INF, "\tSNI = %.*s", (int)params->server_name.len,
+        LOG_INF( "\tSNI = %.*s", (int)params->server_name.len,
              params->server_name.base);
         ensure(ptls_set_server_name(tls, (const char *)params->server_name.base,
                                     params->server_name.len) == 0,
                "ptls_set_server_name");
     } else
-        warn(INF, "\tSNI = ");
+        LOG_INF( "\tSNI = ");
 
     if (params->negotiated_protocols.count == 0) {
-        warn(WRN, "\tALPN = ");
+        LOG_WRN( "\tALPN = ");
         return 0;
     }
 
@@ -414,7 +417,7 @@ on_ch(ptls_on_client_hello_t * const self __attribute__((unused)),
                 goto done;
 
     if (j == alpn_cnt) {
-        warn(WRN, RED "\tALPN = %.*s (and maybe others, none supported)" NRM,
+        LOG_WRN( RED "\tALPN = %.*s (and maybe others, none supported)" NRM,
              (int)params->negotiated_protocols.list[0].len,
              params->negotiated_protocols.list[0].base);
         return PTLS_ALERT_NO_APPLICATION_PROTOCOL;
@@ -423,7 +426,7 @@ on_ch(ptls_on_client_hello_t * const self __attribute__((unused)),
 done:
     // mark this ALPN as negotiated
     ptls_set_negotiated_protocol(tls, (char *)alpn[j].base, alpn[j].len);
-    warn(INF, "\tALPN = %.*s", (int)alpn[j].len, alpn[j].base);
+    LOG_INF( "\tALPN = %.*s", (int)alpn[j].len, alpn[j].base);
 
     return 0;
 }
@@ -526,19 +529,19 @@ static int chk_tp(ptls_t * tls __attribute__((unused)),
 
             switch (tp) {
             case TP_QBG:
-                warn(INF, "\t" BLD YEL "grease_quic_bit" NRM " = true");
+                LOG_INF( "\t" BLD YEL "grease_quic_bit" NRM " = true");
                 c->tp_peer.grease_quic_bit = true;
                 break;
 
             case TP_QR:
-                warn(INF,
+                LOG_INF(
                      "\t" BLD YEL "quantum_ready" NRM " w/len %" PRIu ") = %s",
                      (uint_t)unknown_len,
                      hex2str(pos, unknown_len, (char[16]){""}, 16));
                 break;
 
             default:
-                warn(INF,
+                LOG_INF(
                      "\t" BLD "%s" NRM " (0x%" PRIx " w/len %" PRIu ") = %s",
                      is_grease_tp(tp) ? YEL "grease" : RED "unknown",
                      (uint_t)tp, (uint_t)unknown_len,
@@ -561,13 +564,13 @@ static int chk_tp(ptls_t * tls __attribute__((unused)),
         switch (tp) {
         case TP_IMSD_U:
             dec_chk(tp, &c->tp_peer.max_strm_data_uni, &pos, end);
-            warn(INF, "\tinitial_max_stream_data_uni = %" PRIu " [bytes]",
+            LOG_INF( "\tinitial_max_stream_data_uni = %" PRIu " [bytes]",
                  c->tp_peer.max_strm_data_uni);
             break;
 
         case TP_IMSD_BL:
             dec_chk(tp, &c->tp_peer.max_strm_data_bidi_remote, &pos, end);
-            warn(INF,
+            LOG_INF(
                  "\tinitial_max_stream_data_bidi_local = %" PRIu " [bytes]",
                  c->tp_peer.max_strm_data_bidi_remote);
             break;
@@ -575,38 +578,38 @@ static int chk_tp(ptls_t * tls __attribute__((unused)),
         case TP_IMSD_BR:
             // this is RX'ed as _remote, but applies to streams we open, so:
             dec_chk(tp, &c->tp_peer.max_strm_data_bidi_local, &pos, end);
-            warn(INF,
+            LOG_INF(
                  "\tinitial_max_stream_data_bidi_remote = %" PRIu " [bytes]",
                  c->tp_peer.max_strm_data_bidi_local);
             break;
 
         case TP_IMD:
             dec_chk(tp, &c->tp_peer.max_data, &pos, end);
-            warn(INF, "\tinitial_max_data = %" PRIu " [bytes]",
+            LOG_INF( "\tinitial_max_data = %" PRIu " [bytes]",
                  c->tp_peer.max_data);
             break;
 
         case TP_IMSB:
             dec_chk(tp, &c->tp_peer.max_strms_bidi, &pos, end);
-            warn(INF, "\tinitial_max_streams_bidi = %" PRIu,
+            LOG_INF( "\tinitial_max_streams_bidi = %" PRIu,
                  c->tp_peer.max_strms_bidi);
             break;
 
         case TP_IMSU:
             dec_chk(tp, &c->tp_peer.max_strms_uni, &pos, end);
-            warn(INF, "\tinitial_max_streams_uni = %" PRIu,
+            LOG_INF( "\tinitial_max_streams_uni = %" PRIu,
                  c->tp_peer.max_strms_uni);
             break;
 
         case TP_IDTO:
             dec_chk(tp, &c->tp_peer.max_idle_to, &pos, end);
-            warn(INF, "\tmax_idle_timeout = %" PRIu " [ms]",
+            LOG_INF( "\tmax_idle_timeout = %" PRIu " [ms]",
                  c->tp_peer.max_idle_to);
             break;
 
         case TP_MUPS:
             dec_chk(tp, &c->tp_peer.max_ups, &pos, end);
-            warn(INF, "\tmax_udp_payload_size = %" PRIu " [bytes]",
+            LOG_INF( "\tmax_udp_payload_size = %" PRIu " [bytes]",
                  c->tp_peer.max_ups);
             if (c->tp_peer.max_ups < MIN_INI_LEN)
                 err_close_return(c, ERR_TP, FRM_CRY,
@@ -616,7 +619,7 @@ static int chk_tp(ptls_t * tls __attribute__((unused)),
 
         case TP_ADE:
             dec_chk(tp, &c->tp_peer.ack_del_exp, &pos, end);
-            warn(INF, "\tack_delay_exponent = %" PRIu, c->tp_peer.ack_del_exp);
+            LOG_INF( "\tack_delay_exponent = %" PRIu, c->tp_peer.ack_del_exp);
             if (c->tp_peer.ack_del_exp > 20)
                 err_close_return(c, ERR_TP, FRM_CRY,
                                  "ack_delay_exponent %" PRIu " invalid",
@@ -625,7 +628,7 @@ static int chk_tp(ptls_t * tls __attribute__((unused)),
 
         case TP_MAD:
             dec_chk(tp, &c->tp_peer.max_ack_del, &pos, end);
-            warn(INF, "\tmax_ack_delay = %" PRIu " [ms]",
+            LOG_INF( "\tmax_ack_delay = %" PRIu " [ms]",
                  c->tp_peer.max_ack_del);
             if (c->tp_peer.max_ack_del > (1 << 14))
                 err_close_return(c, ERR_TP, FRM_CRY,
@@ -639,14 +642,14 @@ static int chk_tp(ptls_t * tls __attribute__((unused)),
                     c, ERR_TP, FRM_CRY,
                     "serv rx'ed original_destination_connection_id");
             dec_chk(cid, &orig_dcid, &pos, end);
-            warn(INF, "\toriginal_destination_connection_id = %s",
+            LOG_INF( "\toriginal_destination_connection_id = %s",
                  cid_str(&orig_dcid));
             break;
 
         case TP_DMIG:;
             uint_t dmig;
             dec_chk(tp, &dmig, &pos, end);
-            warn(INF, "\tdisable_active_migration = true");
+            LOG_INF( "\tdisable_active_migration = true");
             c->tp_peer.disable_active_migration = true;
             break;
 
@@ -665,7 +668,7 @@ static int chk_tp(ptls_t * tls __attribute__((unused)),
                 err_close_return(c, ERR_TP, FRM_CRY, "illegal srt len %" PRIu,
                                  (uint_t)l);
             decb(srt, &pos, end, SRT_LEN);
-            warn(INF, "\tstateless_reset_token = %s", srt_str(srt));
+            LOG_INF( "\tstateless_reset_token = %s", srt_str(srt));
 #ifndef NO_SRT_MATCHING
             c->dcid->has_srt = true;
             if (unlikely(conns_by_srt_ins(c, c->dcid->srt) == false))
@@ -718,7 +721,7 @@ static int chk_tp(ptls_t * tls __attribute__((unused)),
             }
 	    struct sockaddr p; // contiki-ng only
             memcpy((uint8_t *)&net_sin6(&p)->sin6_addr,pa6->addr.ip6,sizeof(pa6->addr.ip6));
-            warn(INF,
+            LOG_INF(
                  "\tpreferred_address = IPv4=%s:%u IPv6=[%s]:%u cid=%s srt=%s",
                  "0:000:0"/*w_ntop(&pa4->addr, ip_tmp) contiki-ng only*/, ntohs(pa4->port),
                  wi_ntop(&p), ntohs(pa6->port),
@@ -727,13 +730,13 @@ static int chk_tp(ptls_t * tls __attribute__((unused)),
 
         case TP_ACIL:
             dec_chk(tp, &c->tp_peer.act_cid_lim, &pos, end);
-            warn(INF, "\tactive_connection_id_limit = %" PRIu,
+            LOG_INF( "\tactive_connection_id_limit = %" PRIu,
                  c->tp_peer.act_cid_lim);
             break;
 
         case TP_SCID_I:
             dec_chk(cid, &ini_scid, &pos, end);
-            warn(INF, "\tinitial_source_connection_id = %s",
+            LOG_INF( "\tinitial_source_connection_id = %s",
                  cid_str(&ini_scid));
             break;
 
@@ -742,7 +745,7 @@ static int chk_tp(ptls_t * tls __attribute__((unused)),
                 err_close_return(c, ERR_TP, FRM_CRY,
                                  "serv rx'ed retry_source_connection_id");
             dec_chk(cid, &rtry_scid, &pos, end);
-            warn(INF, "\tretry_source_connection_id = %s", cid_str(&rtry_scid));
+            LOG_INF( "\tretry_source_connection_id = %s", cid_str(&rtry_scid));
             break;
 
         default:
@@ -764,7 +767,7 @@ static int chk_tp(ptls_t * tls __attribute__((unused)),
         struct cid *ptr_ini =  &ini_scid; // contiki-ng only
         mk_cid_str(ERR, ptr_ini, ini_scid_str);
         mk_cid_str(ERR, c->dcid, dcid_str);
-        warn(ERR, "initial_source_connection_id mismatch, %s != %s",
+        LOG_ERR( "initial_source_connection_id mismatch, %s != %s",
              ini_scid_str, dcid_str);
         err_close_return(c, ERR_TP, FRM_CRY,
                          "initial_source_connection_id mismatch");
@@ -909,7 +912,7 @@ void init_tp(struct q_conn * const c)
             if (c->tp_mine.max_strm_data_uni) {
                 enc_tp(&pos, end, TP_IMSD_U, c->tp_mine.max_strm_data_uni);
 #ifdef DEBUG_EXTRA
-                warn(INF, "\tinitial_max_stream_data_uni = %" PRIu " [bytes]",
+                LOG_INF( "\tinitial_max_stream_data_uni = %" PRIu " [bytes]",
                      c->tp_mine.max_strm_data_uni);
 #endif
             }
@@ -920,7 +923,7 @@ void init_tp(struct q_conn * const c)
             if (!is_clnt(c)) {
                 encb_tp(&pos, end, TP_SRT, c->scid->srt, sizeof(c->scid->srt));
 #ifdef DEBUG_EXTRA
-                warn(INF, "\tstateless_reset_token = %s",
+                LOG_INF( "\tstateless_reset_token = %s",
                      srt_str(c->scid->srt));
 #endif
             }
@@ -933,7 +936,7 @@ void init_tp(struct q_conn * const c)
                     odcid.len != UINT8_MAX ? &odcid : &c->odcid;
                 encb_tp(&pos, end, TP_DCID_O, id->id, id->len);
 #ifdef DEBUG_EXTRA
-                warn(INF, "\toriginal_destination_connection_id = %s",
+                LOG_INF( "\toriginal_destination_connection_id = %s",
                      cid_str(id));
 #endif
             }
@@ -942,7 +945,7 @@ void init_tp(struct q_conn * const c)
         case TP_IMSB:
             enc_tp(&pos, end, TP_IMSB, c->tp_mine.max_strms_bidi);
 #ifdef DEBUG_EXTRA
-            warn(INF, "\tinitial_max_streams_bidi = %" PRIu,
+            LOG_INF( "\tinitial_max_streams_bidi = %" PRIu,
                  c->tp_mine.max_strms_bidi);
 #endif
             break;
@@ -951,7 +954,7 @@ void init_tp(struct q_conn * const c)
             if (c->tp_mine.max_idle_to) {
                 enc_tp(&pos, end, TP_IDTO, c->tp_mine.max_idle_to);
 #ifdef DEBUG_EXTRA
-                warn(INF, "\tmax_idle_timeout = %" PRIu " [ms]",
+                LOG_INF( "\tmax_idle_timeout = %" PRIu " [ms]",
                      c->tp_mine.max_idle_to);
 #endif
             }
@@ -960,7 +963,7 @@ void init_tp(struct q_conn * const c)
         case TP_IMSD_BR:
             enc_tp(&pos, end, TP_IMSD_BR, c->tp_mine.max_strm_data_bidi_remote);
 #ifdef DEBUG_EXTRA
-            warn(INF,
+            LOG_INF(
                  "\tinitial_max_stream_data_bidi_remote = %" PRIu " [bytes]",
                  c->tp_mine.max_strm_data_bidi_remote);
 #endif
@@ -969,7 +972,7 @@ void init_tp(struct q_conn * const c)
         case TP_IMSD_BL:
             enc_tp(&pos, end, TP_IMSD_BL, c->tp_mine.max_strm_data_bidi_local);
 #ifdef DEBUG_EXTRA
-            warn(INF,
+            LOG_INF(
                  "\tinitial_max_stream_data_bidi_local = %" PRIu " [bytes]",
                  c->tp_mine.max_strm_data_bidi_remote);
 #endif
@@ -978,7 +981,7 @@ void init_tp(struct q_conn * const c)
         case TP_IMD:
             enc_tp(&pos, end, TP_IMD, c->tp_mine.max_data);
 #ifdef DEBUG_EXTRA
-            warn(INF, "\tinitial_max_data = %" PRIu " [bytes]",
+            LOG_INF( "\tinitial_max_data = %" PRIu " [bytes]",
                  c->tp_mine.max_data);
 #endif
             break;
@@ -987,7 +990,7 @@ void init_tp(struct q_conn * const c)
             if (c->tp_mine.ack_del_exp != DEF_ACK_DEL_EXP) {
                 enc_tp(&pos, end, TP_ADE, c->tp_mine.ack_del_exp);
 #ifdef DEBUG_EXTRA
-                warn(INF, "\tack_delay_exponent = %" PRIu,
+                LOG_INF( "\tack_delay_exponent = %" PRIu,
                      c->tp_mine.ack_del_exp);
 #endif
             }
@@ -997,7 +1000,7 @@ void init_tp(struct q_conn * const c)
             if (c->tp_mine.max_ack_del != DEF_MAX_ACK_DEL) {
                 enc_tp(&pos, end, TP_MAD, c->tp_mine.max_ack_del);
 #ifdef DEBUG_EXTRA
-                warn(INF, "\tmax_ack_delay = %" PRIu " [ms]",
+                LOG_INF( "\tmax_ack_delay = %" PRIu " [ms]",
                      c->tp_mine.max_ack_del);
 #endif
             }
@@ -1006,7 +1009,7 @@ void init_tp(struct q_conn * const c)
         case TP_MUPS:
             enc_tp(&pos, end, TP_MUPS, c->tp_mine.max_ups);
 #ifdef DEBUG_EXTRA
-            warn(INF, "\tmax_udp_payload_size = %" PRIu " [bytes]",
+            LOG_INF( "\tmax_udp_payload_size = %" PRIu " [bytes]",
                  c->tp_mine.max_ups);
 #endif
             break;
@@ -1015,7 +1018,7 @@ void init_tp(struct q_conn * const c)
             if (c->tp_mine.disable_active_migration == false) {
                 enc_tp(&pos, end, TP_ACIL, c->tp_mine.act_cid_lim);
 #ifdef DEBUG_EXTRA
-                warn(INF, "\tactive_connection_id_limit = %" PRIu,
+                LOG_INF( "\tactive_connection_id_limit = %" PRIu,
                      c->tp_mine.act_cid_lim);
 #endif
             }
@@ -1044,7 +1047,7 @@ void init_tp(struct q_conn * const c)
                 encb(&pos, end, (uint8_t *)pa->cid.id, pa->cid.len);
                 encb(&pos, end, srt, SRT_LEN);
 #ifdef DEBUG_EXTRA
-                warn(INF,
+                LOG_INF(
                      "\tpreferred_address = IPv4=%s:%u IPv6=[%s]:%u cid=%s "
                      "srt=%s",
                      w_ntop(&pa4->addr, ip_tmp), bswap16(pa4->port),
@@ -1059,7 +1062,7 @@ void init_tp(struct q_conn * const c)
             if (c->tp_mine.disable_active_migration) {
                 enc_tp_empty(&pos, end, TP_DMIG);
 #ifdef DEBUG_EXTRA
-                warn(INF, "\tdisable_active_migration = true");
+                LOG_INF( "\tdisable_active_migration = true");
 #endif
             }
             break;
@@ -1068,7 +1071,7 @@ void init_tp(struct q_conn * const c)
             const struct cid * const scid = c->scid ? c->scid : &zero_len_cid;
             encb_tp(&pos, end, TP_SCID_I, scid->id, scid->len);
 #ifdef DEBUG_EXTRA
-            warn(INF, "\tinitial_source_connection_id = %s", cid_str(scid));
+            LOG_INF( "\tinitial_source_connection_id = %s", cid_str(scid));
 #endif
 
             break;
@@ -1078,7 +1081,7 @@ void init_tp(struct q_conn * const c)
             if (!is_clnt(c) && rtry_scid.len != UINT8_MAX) {
                 encb_tp(&pos, end, TP_SCID_R, rtry_scid.id, rtry_scid.len);
 #ifdef DEBUG_EXTRA
-                warn(INF, "\tretry_source_connection_id = %s",
+                LOG_INF( "\tretry_source_connection_id = %s",
                      cid_str(&rtry_scid));
 #endif
             }
@@ -1089,7 +1092,7 @@ void init_tp(struct q_conn * const c)
             if (tp_order[j] == grease_type) {
                 encb_tp(&pos, end, grease_type, &grease[1], grease_len);
 #ifdef DEBUG_EXTRA
-                warn(WRN, "\tgrease (0x%" PRIx " w/len %u) = %s",
+                LOG_WRN( "\tgrease (0x%" PRIx " w/len %u) = %s",
                      (uint_t)grease_type, grease_len,
                      hex2str(&grease[1], grease_len,
                              (char[hex_str_len(TP_LEN)]){""},
@@ -1099,7 +1102,7 @@ void init_tp(struct q_conn * const c)
                 if (c->do_qr_test) {
                     encb_tp(&pos, end, TP_QR, ped(c->w)->scratch, MIN_INI_LEN);
 #ifdef DEBUG_EXTRA
-                    warn(WRN,
+                    LOG_WRN(
                          "\t" BLD YEL "quantum_ready" NRM
                          " (0x%04x w/len %u) = %s",
                          TP_QR, MIN_INI_LEN,
@@ -1111,7 +1114,7 @@ void init_tp(struct q_conn * const c)
                 if (c->tp_mine.grease_quic_bit) {
                     enc_tp_empty(&pos, end, TP_QBG);
 #ifdef DEBUG_EXTRA
-                    warn(WRN, "\t" BLD YEL "grease_quic_bit" NRM " = true");
+                    LOG_WRN( "\t" BLD YEL "grease_quic_bit" NRM " = true");
 #endif
                 }
             } else
@@ -1158,7 +1161,7 @@ static int encrypt_ticket_cb(ptls_encrypt_ticket_t * self
         return -1;
 
     if (is_encrypt) {
-        warn(INF, "creating new 0-RTT session ticket for %s conn %s (%s %s)",
+        LOG_INF( "creating new 0-RTT session ticket for %s conn %s (%s %s)",
              conn_type(c), cid_str(c->scid), ptls_get_server_name(tls),
              ptls_get_negotiated_protocol(tls));
 
@@ -1180,7 +1183,7 @@ static int encrypt_ticket_cb(ptls_encrypt_ticket_t * self
         if (src.len < quant_commit_hash_len + sizeof(tid) +
                           ped(c->w)->dec_tick_tok.aead->algo->tag_size ||
             memcmp(src.base, quant_commit_hash, quant_commit_hash_len) != 0) {
-            warn(WRN,
+            LOG_WRN(
                  "could not verify 0-RTT session ticket for %s conn %s (%s "
                  "%s)",
                  conn_type(c), cid_str(c->scid), ptls_get_server_name(tls),
@@ -1200,7 +1203,7 @@ static int encrypt_ticket_cb(ptls_encrypt_ticket_t * self
                                            src_len, tid, 0, 0);
 
         if (n > src_len) {
-            warn(WRN,
+            LOG_WRN(
                  "could not decrypt 0-RTT session ticket for %s conn %s "
                  "(%s %s)",
                  conn_type(c), cid_str(c->scid), ptls_get_server_name(tls),
@@ -1210,7 +1213,7 @@ static int encrypt_ticket_cb(ptls_encrypt_ticket_t * self
         }
         dst->off += n;
 
-        warn(INF, "verified 0-RTT session ticket for %s conn %s (%s %s)",
+        LOG_INF( "verified 0-RTT session ticket for %s conn %s (%s %s)",
              conn_type(c), cid_str(c->scid), ptls_get_server_name(tls),
              ptls_get_negotiated_protocol(tls));
         c->did_0rtt = true;
@@ -1229,7 +1232,7 @@ static int save_ticket_cb(ptls_save_ticket_t * self __attribute__((unused)),
 
 #if !defined(PARTICLE) && !defined(RIOT_VERSION)
     const char * const ticket_store = ped(c->w)->conf.ticket_store;
-    warn(NTE, "saving TLS tickets to %s", ticket_store);
+    LOG_INF( "saving TLS tickets to %s", ticket_store);
     const int fp = open(ticket_store, O_CREAT | O_TRUNC | O_WRONLY | O_CLOEXEC,
                         S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
     ensure(fp >= 0, "could not open ticket file %s", ticket_store);
@@ -1285,7 +1288,7 @@ static int save_ticket_cb(ptls_save_ticket_t * self __attribute__((unused)),
 #if !defined(PARTICLE) && !defined(RIOT_VERSION)
     splay_foreach (t, tickets_by_peer, &tickets) {
 #endif
-        warn(INF, "writing TLS ticket for %s conn %s (%s %s)", conn_type(c),
+        LOG_INF( "writing TLS ticket for %s conn %s (%s %s)", conn_type(c),
              cid_str(c->scid), t->sni, t->alpn);
 
 #if !defined(PARTICLE) && !defined(RIOT_VERSION)
@@ -1391,7 +1394,7 @@ void init_tls(struct q_conn * const c,
             c->try_0rtt = true;
         }
 
-        warn(DBG, "using ALPN %.*s", (int)c->tls.alpn.len, c->tls.alpn.base);
+        LOG_DBG( "using ALPN %.*s", (int)c->tls.alpn.len, c->tls.alpn.base);
         hshk_prop->client.negotiated_protocols.list = &c->tls.alpn;
         hshk_prop->client.negotiated_protocols.count = 1;
         hshk_prop->client.max_early_data_size = &c->tls.max_early_data;
@@ -1464,7 +1467,7 @@ int tls_io(struct q_stream * const s, struct w_iov * const iv)
          &c->tls.tls_hshk_prop);
 
 #ifdef DEBUG_PROT
-    warn(DBG,
+    LOG_DBG(
          "epoch %u, in %lu (off %" PRIu
          "), gen %lu (%lu-%lu-%lu-%lu-%lu), ret %d, left %lu",
          ep_in, (unsigned long)(iv ? iv->len : 0), iv ? meta(iv).strm_off : 0,
@@ -1517,7 +1520,7 @@ int tls_io(struct q_stream * const s, struct w_iov * const iv)
         if (out_len == 0)
             continue;
 #ifdef DEBUG_PROT
-        warn(DBG, "epoch %u: off %lu len %lu", e, (unsigned long)epoch_off[e],
+        LOG_DBG( "epoch %u: off %lu len %lu", e, (unsigned long)epoch_off[e],
              (unsigned long)out_len);
 #endif
         struct w_iov_sq o = w_iov_sq_initializer(o);
@@ -1564,12 +1567,12 @@ static void __attribute__((nonnull)) free_ticket(struct tls_ticket * const t)
 
 static void read_tickets(const struct q_conf * const conf)
 {
-    warn(INF, "reading TLS tickets from %s", conf->ticket_store);
+    LOG_INF( "reading TLS tickets from %s", conf->ticket_store);
 
 #if !defined(PARTICLE) && !defined(RIOT_VERSION)
     const int fp = open(conf->ticket_store, O_RDONLY | O_CLOEXEC);
     if (fp < 0) {
-        warn(WRN, "could not read TLS tickets from %s: %s", conf->ticket_store,
+        LOG_WRN( "could not read TLS tickets from %s: %s", conf->ticket_store,
              strerror(errno));
         return;
     }
@@ -1585,7 +1588,7 @@ static void read_tickets(const struct q_conf * const conf)
         goto remove;
     if (memcmp(buf, quant_commit_hash, hash_len) != 0) {
     remove:
-        warn(WRN, "TLS tickets were stored by different %s version, removing",
+        LOG_WRN( "TLS tickets were stored by different %s version, removing",
              quant_name);
         ensure(unlink(conf->ticket_store) == 0, "unlink");
         goto done;
@@ -1631,7 +1634,7 @@ static void read_tickets(const struct q_conf * const conf)
             goto abort;
 
         ensure(splay_insert(tickets_by_peer, &tickets, t) == 0, "inserted");
-        warn(INF, "got TLS ticket %s %s", t->sni, t->alpn);
+        LOG_INF( "got TLS ticket %s %s", t->sni, t->alpn);
         continue;
     abort:
         free_ticket(t);
@@ -1678,7 +1681,7 @@ static int update_traffic_key_cb(ptls_update_traffic_key_t * const self
                                  const void * const secret)
 {
 #ifdef DEBUG_PROT
-    warn(CRT, "update_traffic_key %s %lu", is_enc ? "tx" : "rx",
+    LOG_ERR( "update_traffic_key %s %lu", is_enc ? "tx" : "rx",
          (unsigned long)epoch);
 #endif
     struct q_conn * const c = *ptls_get_data_ptr(tls);
@@ -1740,7 +1743,7 @@ void init_tls_ctx(const struct q_conf * const conf,
     ptls_context_t * const tls_ctx = &ped->tls_ctx;
 #if defined(PARTICLE) || defined(RIOT_VERSION)
     // the picotls minicrypto backend depends on this
-    uECC_set_rng(uecc_rng);
+    uECC_set_rng(uecc_rng_e);
 #endif
 
     if (conf && conf->tls_key) {
@@ -1799,7 +1802,7 @@ void init_tls_ctx(const struct q_conf * const conf,
 
 #ifdef WITH_OPENSSL
     const int fusion = ptls_fusion_is_supported_by_cpu();
-    warn(DBG, "picotls fusion is%s supported",
+    LOG_DBG( "picotls fusion is%s supported",
          fusion ? "" : RED BLD " not" NRM);
 
     static const ptls_cipher_suite_t fusion_aes128gcmsha256 = {
@@ -1865,7 +1868,7 @@ void init_tls_ctx(const struct q_conf * const conf,
 
     if (conf && conf->tls_ca_store) {
         if (strncmp(conf->tls_ca_store, "false", 5) == 0) {
-            warn(CRT, "disabling server cert verification");
+            LOG_ERR( "disabling server cert verification");
             goto done_verify_certs;
         }
 
@@ -1875,12 +1878,12 @@ void init_tls_ctx(const struct q_conf * const conf,
             X509_STORE_add_lookup(ped->ca_store, X509_LOOKUP_file());
         if (X509_LOOKUP_load_file(lookup, conf->tls_ca_store,
                                   X509_FILETYPE_PEM) != 1) {
-            warn(CRT, "cannot load CA store from %s, using default",
+            LOG_ERR( "cannot load CA store from %s, using default",
                  conf->tls_ca_store);
             X509_STORE_free(ped->ca_store);
             ped->ca_store = 0;
         } else
-            warn(DBG, "using CA store %s to verify server certs",
+            LOG_DBG( "using CA store %s to verify server certs",
                  conf->tls_ca_store);
     }
     ensure(ptls_openssl_init_verify_certificate(&ped->verify_cert,
@@ -1972,7 +1975,7 @@ uint16_t dec_aead(const struct w_iov * const xv,
     memcpy(v->buf, xv->buf, hdr_len);
 
 #ifdef DEBUG_PROT
-    warn(DBG, "dec %s AEAD over [%u..%u] in [%u..%u]",
+    LOG_DBG( "dec %s AEAD over [%u..%u] in [%u..%u]",
          pkt_type_str(m->hdr.flags, &m->hdr.vers), hdr_len, len - AEAD_LEN - 1,
          len - AEAD_LEN, len - 1);
 #endif
@@ -1988,7 +1991,7 @@ uint16_t enc_aead(const struct w_iov * const v,
 {
     const struct cipher_ctx * ctx = which_cipher_ctx_out(m, true);
     if (unlikely(ctx == 0 || ctx->aead == 0)) {
-        warn(NTE, "no %s crypto context",
+        LOG_INF( "no %s crypto context",
              pkt_type_str(m->hdr.flags, &m->hdr.vers));
         return 0;
     }
@@ -2011,7 +2014,7 @@ uint16_t enc_aead(const struct w_iov * const v,
         return 0;
 
 #ifdef DEBUG_PROT
-    warn(DBG, "enc %s AEAD over [%u..%u] in [%u..%u]",
+    LOG_DBG( "enc %s AEAD over [%u..%u] in [%u..%u]",
          pkt_type_str(m->hdr.flags, &m->hdr.vers), hdr_len,
          hdr_len + plen - AEAD_LEN - 1, hdr_len + plen - AEAD_LEN,
          hdr_len + plen - 1);
@@ -2047,7 +2050,7 @@ void mk_rtry_tok(struct q_conn * const c, const struct cid * const odcid)
     // NOTE: update max_frame_len() when c->tok_len changes
 
 #ifdef DEBUG_PROT
-    warn(DBG, "encrypted Retry tok %s",
+    LOG_DBG( "encrypted Retry tok %s",
          hex2str(c->tok, c->tok_len, (char[hex_str_len(MAX_TOK_LEN)]){""},
                  hex_str_len(MAX_TOK_LEN)));
 #endif
@@ -2068,7 +2071,7 @@ bool verify_rtry_tok(struct q_conn * const c,
         c->tok_len = (uint16_t)len;
         memcpy(c->tok, ped(c->w)->scratch, c->tok_len);
 #ifdef DEBUG_PROT
-        warn(DBG, "decrypted Retry tok %s",
+        LOG_DBG( "decrypted Retry tok %s",
              hex2str(c->tok, c->tok_len, (char[hex_str_len(MAX_TOK_LEN)]){""},
                      hex_str_len(MAX_TOK_LEN)));
 #endif
@@ -2117,7 +2120,7 @@ void flip_keys(struct q_conn * const c,
     struct pn_data * const pnd = &c->pns[pn_data].data;
     const bool new_kyph = !(out ? pnd->out_kyph : pnd->in_kyph);
 #ifdef DEBUG_PROT
-    warn(DBG, "flip %s kyph %u -> %u", out ? "out" : "in",
+    LOG_DBG( "flip %s kyph %u -> %u", out ? "out" : "in",
          out ? pnd->out_kyph : pnd->in_kyph, new_kyph);
 #endif
 
@@ -2159,5 +2162,5 @@ void maybe_flip_keys(struct q_conn * const c, const bool out)
         flip_keys(c, out, cs);
         c->do_key_flip = false;
     } else
-        warn(ERR, "cannot obtain cipher suite");
+        LOG_ERR( "cannot obtain cipher suite");
 }

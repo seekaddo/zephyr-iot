@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <sys/types.h>
+#include <stdlib.h>
 
 /**
  *
@@ -54,6 +55,24 @@ char *strncpy(char *ZRESTRICT d, const char *ZRESTRICT s, size_t n)
 		*d = '\0';
 		d++;
 		n--;
+	}
+
+	return dest;
+}
+
+/**
+ *
+ * @brief Duplicate a string
+ *
+ * @return pointer to new string, or NULL if insufficient memory available
+ */
+
+char *strdup(const char *s)
+{
+	char *dest = malloc(strlen(s)+1);
+
+	if (dest) {
+		strcpy(dest, s);
 	}
 
 	return dest;

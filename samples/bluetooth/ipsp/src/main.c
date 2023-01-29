@@ -24,14 +24,20 @@ LOG_MODULE_REGISTER(ipsp);
 #include <zephyr/net/net_core.h>
 #include <zephyr/net/net_context.h>
 #include <zephyr/net/udp.h>
+#ifdef ZEPHYR_TEST
+#include "quant.h"
+#endif
 
 /* Define my IP address where to expect messages */
 #define MY_IP6ADDR { { { 0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, \
 			 0, 0, 0, 0, 0, 0, 0, 0x1 } } }
 #define MY_PREFIX_LEN 64
-
+struct sockaddr  myAddr;
+extern  struct qmcon tranx_conn;
 static struct in6_addr in6addr_my = MY_IP6ADDR;
-
+extern char *net_sprint_addr(sa_family_t af, const void *addr);
+uint8_t udp_connected = 1;
+uint32_t syncNewData = 0;
 #define MY_PORT 4242
 
 #define STACKSIZE 2000
@@ -56,6 +62,7 @@ static struct net_buf_pool *data_tcp_pool(void)
 }
 
 static struct k_sem quit_lock;
+extern struct k_sem waitpkt_lock;
 
 static inline void quit(void)
 {
@@ -80,7 +87,17 @@ static inline void init_app(void)
 
 		ifaddr = net_if_ipv6_addr_add(net_if_get_default(),
 					      &in6addr_my, NET_ADDR_MANUAL, 0);
+		LOG_INF("-----------Device Running on IPv6 addr: %s port: %d",
+			net_sprint_addr(AF_INET6,(uint8_t *)&ifaddr->address.in6_addr),
+			ntohs(MY_PORT) );
 	} while (0);
+
+	// string to ip addr
+	net_ipv6_addr_copy_raw((uint8_t *)&net_sin6(&myAddr)->sin6_addr,
+			       in6addr_my.s6_addr);
+	net_sin6(&myAddr)->sin6_family = AF_INET6;
+	net_sin6(&myAddr)->sin6_port = htons(MY_PORT); // default server port
+
 }
 
 static inline bool get_context(struct net_context **udp_recv6,
@@ -137,6 +154,7 @@ static int build_reply(const char *name,
 {
 	int reply_len = net_pkt_remaining_data(pkt);
 	int ret;
+	LOG_INF("-------------Build UDP reply");
 
 	LOG_DBG("%s received %d bytes", name, reply_len);
 
@@ -172,6 +190,29 @@ static inline void set_dst_addr(sa_family_t family,
 	net_sin6(dst_addr)->sin6_port = udp_hdr->src_port;
 }
 
+#ifdef ZEPHYR_TEST
+static void quic_recv(struct net_context *context,
+			 struct net_pkt *pkt,
+			 union net_ip_header *ip_hdr,
+			 union net_proto_header *proto_hdr,
+			 int status,
+			 void *user_data)
+{
+	// prepare data for the quick socket receive to pull all pkt details and buffer.
+	//tranx_conn.w->u6_rec->src_port = proto_hdr->udp->src_port;
+	net_ipv6_addr_copy_raw((uint8_t *)&net_sin6(&tranx_conn.w->u6_rec->src_addr)->sin6_addr,
+			       ip_hdr->ipv6->src);
+	net_sin6(&tranx_conn.w->u6_rec->src_addr)->sin6_family = AF_INET6;
+	net_sin6(&tranx_conn.w->u6_rec->src_addr)->sin6_port = proto_hdr->udp->src_port;
+	tranx_conn.w->u6_rec->pkt = pkt;
+	tranx_conn.w->u6_rec->user_data = user_data;
+
+	//signal to the receiver end of quic to fast pull the udp pkt
+	syncNewData += 1;
+	k_sem_give(&waitpkt_lock);
+}
+#endif
+
 static void udp_received(struct net_context *context,
 			 struct net_pkt *pkt,
 			 union net_ip_header *ip_hdr,
@@ -188,9 +229,10 @@ static void udp_received(struct net_context *context,
 	snprintf(dbg, MAX_DBG_PRINT, "UDP IPv%c",
 		 family == AF_INET6 ? '6' : '4');
 
+
 	set_dst_addr(family, pkt, ip_hdr->ipv6, proto_hdr->udp, &dst_addr);
 
-	ret = build_reply(dbg, pkt, buf_tx);
+	ret = build_reply(dbg, pkt, buf_tx); // pkt buffer
 	if (ret < 0) {
 		LOG_ERR("Cannot send data to peer (%d)", ret);
 		return;
@@ -203,6 +245,9 @@ static void udp_received(struct net_context *context,
 				 sizeof(struct sockaddr_in6) :
 				 sizeof(struct sockaddr_in),
 				 pkt_sent, K_NO_WAIT, user_data);
+	LOG_INF("-------------sent UDP ret: %d dest: %s port: %d",
+		ret, net_sprint_addr(AF_INET6,(uint8_t *)&net_sin6(&dst_addr)->sin6_addr),
+		ntohs(net_sin6(&dst_addr)->sin6_port) );
 	if (ret < 0) {
 		LOG_ERR("Cannot send data to peer (%d)", ret);
 	}
@@ -212,7 +257,11 @@ static void setup_udp_recv(struct net_context *udp_recv6)
 {
 	int ret;
 
+#ifdef ZEPHYR_TEST
+	ret = net_context_recv(udp_recv6, quic_recv, K_NO_WAIT, NULL);
+#else
 	ret = net_context_recv(udp_recv6, udp_received, K_NO_WAIT, NULL);
+#endif
 	if (ret < 0) {
 		LOG_ERR("Cannot receive IPv6 UDP packets");
 	}
@@ -290,16 +339,27 @@ static void listen(void)
 {
 	struct net_context *udp_recv6 = { 0 };
 	struct net_context *tcp_recv6 = { 0 };
+	udp_connected = 1;
 
 	if (!get_context(&udp_recv6, &tcp_recv6)) {
 		LOG_ERR("Cannot get network contexts");
+		udp_connected = 0;
 		return;
 	}
 
 	LOG_INF("Starting to wait");
+#ifdef ZEPHYR_TEST
+	quic_init_Wegine(udp_recv6);
+#endif
 
 	setup_tcp_accept(tcp_recv6);
 	setup_udp_recv(udp_recv6);
+
+#ifdef ZEPHYR_TEST
+#define SERVER_IPV6_ADDR "2001:db8::2"
+	quic_transx("/index.html", SERVER_IPV6_ADDR);
+#endif
+
 
 	k_sem_take(&quit_lock, K_FOREVER);
 

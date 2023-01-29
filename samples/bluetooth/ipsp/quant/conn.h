@@ -324,7 +324,7 @@ extern struct q_conn_sl c_zcid;
 #if !defined(NDEBUG) && defined(DEBUG_EXTRA) && !defined(FUZZING)
 #define conn_to_state(c, s)                                                    \
     do {                                                                       \
-        warn(DBG, "%s%s conn %s state %s -> " RED "%s" NRM,                    \
+        LOG_DBG( "%s%s conn %s state %s -> " RED "%s" NRM,                    \
              (c)->state == (s) ? RED BLD "useless transition: " NRM : "",      \
              conn_type(c), (c)->scid ? cid_str((c)->scid) : "?",               \
              conn_state_str[(c)->state], conn_state_str[(s)]);                 \
@@ -449,8 +449,9 @@ conn_type(const struct q_conn * const c
 static inline bool __attribute__((nonnull, no_instrument_function))
 has_pval_wnd(const struct q_conn * const c, const uint16_t len)
 {
+
     if (unlikely(c->rec.cur.in_flight + len >= c->path_val_win)) {
-        warn(DBG, "%s conn %s path val lim reached: %" PRIu " + %u >= %" PRIu,
+        fprintf(stdout, "%s conn %s path val lim reached: %" PRIu " + %u >= %" PRIu,
              conn_type(c), cid_str(c->scid), c->rec.cur.in_flight, len,
              c->path_val_win);
         return false;
@@ -464,12 +465,12 @@ static inline bool __attribute__((nonnull, no_instrument_function))
 has_wnd(const struct q_conn * const c, const uint16_t len)
 {
     if (unlikely(c->blocked)) {
-        warn(DBG, "%s conn %s is blocked", conn_type(c), cid_str(c->scid));
+	fprintf(stdout,"%s conn %s is blocked", conn_type(c), cid_str(c->scid));
         return false;
     }
 
     if (unlikely(c->rec.cur.in_flight + len >= c->rec.cur.cwnd)) {
-        warn(DBG,
+        fprintf(stdout,
              "%s conn %s cwnd lim reached: in_flight %" PRIu " + %u >= %" PRIu,
              conn_type(c), cid_str(c->scid), c->rec.cur.in_flight, len,
              c->rec.cur.cwnd);

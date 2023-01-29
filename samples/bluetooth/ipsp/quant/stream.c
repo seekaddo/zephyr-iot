@@ -38,6 +38,8 @@
 #include "quic.h"
 #include "stream.h"
 
+#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+LOG_MODULE_REGISTER(stream);
 
 #ifndef NO_OOO_DATA
 SPLAY_GENERATE(ooo_by_off, pkt_meta, off_node, ooo_by_off_cmp)
@@ -136,7 +138,7 @@ void free_stream(struct q_stream * const s)
 {
     struct q_conn * const c = s->c;
     if (likely(s->id >= 0)) {
-        warn(DBG, "freeing strm " FMT_SID " on %s conn %s", s->id, conn_type(c),
+        LOG_DBG( "freeing strm " FMT_SID " on %s conn %s", s->id, conn_type(c),
              cid_str(c->scid));
         diet_insert(&c->clsd_strms, (uint_t)s->id, 0);
         const khiter_t k =
@@ -189,7 +191,7 @@ void track_bytes_out(struct q_stream * const s, const uint_t n)
 void reset_stream(struct q_stream * const s, const bool forget)
 {
 #ifdef DEBUG_STREAMS
-    warn(DBG, "reset strm %u " FMT_SID " on %s conn %s", forget, s->id,
+    LOG_DBG( "reset strm %u " FMT_SID " on %s conn %s", forget, s->id,
          conn_type(s->c), cid_str(s->c->scid));
 #endif
 

@@ -68,6 +68,8 @@ char __srt_str[hex_str_len(SRT_LEN)];
 char __tok_str[hex_str_len(MAX_TOK_LEN)];
 char __rit_str[hex_str_len(RIT_LEN)];
 
+#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+LOG_MODULE_REGISTER(quic);
 
 /// QUIC version supported by this implementation in order of preference.
 const uint32_t ok_vers[] = {
@@ -172,7 +174,7 @@ struct w_iov * dup_iov(const struct w_iov * const v,
                        struct pkt_meta ** const mdup,
                        const uint16_t off)
 {
-    struct w_iov * const vdup = w_alloc_iov(v->w, v->wv_af, v->len - off, 0);
+    struct w_iov * const vdup = w_alloc_iov(v->w, ws_straf(v->wv_af), v->len - off, 0);
     if (likely(vdup)) {
         if (mdup) {
             *mdup = &meta(vdup);
@@ -232,20 +234,19 @@ struct q_conn * q_connect(struct w_engine * const w,
     //todo:dEE change this to the contiki-ng version and skip this steps
     uint16_t idx = UINT16_MAX;
 
-    return 0;
 #ifdef CONTIKI_NG_LE
 
     if (w->have_ip6)
     {
       idx = 0;
-      p.port = peer->port;
-      p.addr.af = AF_INET6
-      memcpy(p.addr.ip6,peer->ipaddr.u8,sizeof(p.addr.ip6));
+      p.port = net_sin6(peer)->sin6_port;
+      net_sin6(peer)->sin6_family = AF_INET6;
+      memcpy(p.addr.ip6,net_sin6(peer)->sin6_addr.s6_addr,sizeof(p.addr.ip6));
 
     }
 
     if (unlikely(idx == UINT16_MAX)) {
-      warn(CRT, "address family error");
+      LOG_ERR( "address family error");
       return 0;
     }
 #else
@@ -260,7 +261,7 @@ struct q_conn * q_connect(struct w_engine * const w,
             if (local_peer == w_is_linklocal(&w->ifaddr[idx].addr))
                 break;
         if (idx == (w->have_ip4 ? w->addr4_pos : w->addr_cnt)) {
-            warn(WRN, "could not find suitable addr to talk to %s peer",
+            LOG_WRN( "could not find suitable addr to talk to %s peer",
                  local_peer ? "link-local" : "global");
             return 0;
         }
@@ -268,7 +269,7 @@ struct q_conn * q_connect(struct w_engine * const w,
     }
 
     if (unlikely(idx == UINT16_MAX || w_to_waddr(&p.addr, peer) == false)) {
-        warn(CRT, "address family error");
+        LOG_ERR( "address family error");
         return 0;
     }
 #endif
@@ -282,17 +283,17 @@ struct q_conn * q_connect(struct w_engine * const w,
     // if we have no early data, we're not trying 0-RTT
     c->try_0rtt &= early_data && early_data_stream;
 
-    warn(WRN,
+    LOG_WRN(
          "new %u-RTT %s conn %s to %s%s%s:%u, %" PRIu " byte%s queued for TX",
          c->try_0rtt ? 0 : 1, conn_type(c), cid_str(c->scid),
-         p.addr.af == AF_INET6 ? "[" : "", wi_ntop(&peer->ipaddr, ip_tmp),
-         p.addr.af == AF_INET6 ? "]" : "", uip_ntohs(p.port),
+         p.addr.af == AF_INET6 ? "[" : "", wi_ntop(peer),
+         p.addr.af == AF_INET6 ? "]" : "", ntohs(ws_str(*peer)),
          early_data ? w_iov_sq_len(early_data) : 0,
          plural(early_data ? w_iov_sq_len(early_data) : 0));
 
     restart_idle_alarm(c);
 
-    warn(DBG,"TLS handshake satrted .......-------------");
+    LOG_DBG("TLS handshake satrted .......-------------");
     // start TLS handshake
     tls_io(c->cstrms[ep_init], 0);
 
@@ -308,14 +309,14 @@ struct q_conn * q_connect(struct w_engine * const w,
 
     timeouts_add(ped(w)->wheel, &c->tx_w, 0);
 
-    warn(DBG, "waiting for connect on %s conn %s to %s%s%s:%u", conn_type(c),
+    LOG_DBG( "waiting for connect on %s conn %s to %s%s%s:%u", conn_type(c),
          cid_str(c->scid), p.addr.af == AF_INET6 ? "[" : "",
-         wi_ntop(&peer->ipaddr, ip_tmp), p.addr.af == AF_INET6 ? "]" : "",
-         uip_ntohs(p.port));
+         wi_ntop(peer), p.addr.af == AF_INET6 ? "]" : "",
+         ntohs(ws_strprt(*peer)));
     conn_to_state(c, conn_opng);
 
     //loop_run(w, (func_ptr)q_connect, c, 0);
-    warn(DBG,"----------loop_run done q_connect----");
+    LOG_DBG("----------loop_run done q_connect----");
 
     if (fin && early_data_stream && *early_data_stream &&
         (*early_data_stream)->state != strm_clsd)
@@ -326,11 +327,11 @@ struct q_conn * q_connect(struct w_engine * const w,
 
     if (c->state != conn_estb && c->state != conn_clsg &&
         c->state != conn_drng) {
-        warn(WRN, "%s conn %s not connected", conn_type(c), cid_str(c->scid));
+        LOG_WRN( "%s conn %s not connected", conn_type(c), cid_str(c->scid));
         return 0;
     }
 
-    warn(WRN, "%s conn %s connected%s, cipher %s", conn_type(c),
+    LOG_WRN( "%s conn %s connected%s, cipher %s", conn_type(c),
          cid_str(c->scid), c->did_0rtt ? " after 0-RTT" : "",
          c->pns[pn_data]
              .data.out_1rtt[c->pns[pn_data].data.out_kyph]
@@ -347,13 +348,13 @@ bool q_write(struct q_stream * const s,
     struct q_conn * const c = s->c;
     if (unlikely(c->state == conn_qlse || c->state == conn_drng ||
                  c->state == conn_clsd)) {
-        warn(ERR, "%s conn %s is in state %s, can't write", conn_type(c),
+        LOG_ERR( "%s conn %s is in state %s, can't write", conn_type(c),
              cid_str(c->scid), conn_state_str[c->state]);
         return false;
     }
 
     if (unlikely(s->state == strm_hclo || s->state == strm_clsd)) {
-        warn(ERR, "%s conn %s strm " FMT_SID " is in state %s, can't write",
+        LOG_ERR( "%s conn %s strm " FMT_SID " is in state %s, can't write",
              conn_type(c), cid_str(c->scid), s->id, strm_state_str[s->state]);
         return false;
     }
@@ -370,7 +371,7 @@ bool q_write(struct q_stream * const s,
         mark_fin(q);
     }
 
-    warn(WRN,
+    LOG_WRN(
          "writing %" PRIu " byte%s %sin %" PRIu
          " buf%s on %s conn %s strm " FMT_SID,
          w_iov_sq_len(q), plural(w_iov_sq_len(q)), fin ? "(and FIN) " : "",
@@ -420,11 +421,11 @@ bool q_read_stream(struct q_stream * const s,
     struct q_conn * const c = s->c;
 
     if (q_peer_closed_stream(s) == false && all) {
-	warn(WRN, "reading all on %s conn %s strm " FMT_SID, conn_type(c),
+	LOG_WRN( "reading all on %s conn %s strm " FMT_SID, conn_type(c),
 	     cid_str(c->scid), s->id);
     again:
 	loop_run(c->w, (func_ptr)q_read_stream, c, s);
-	warn(DBG,"----------------q_read_stream---loop_run done");
+	LOG_DBG("----------------q_read_stream---loop_run done");
     }
 
     if (sq_empty(&s->in))
@@ -434,7 +435,7 @@ bool q_read_stream(struct q_stream * const s,
     struct w_iov * const last = sq_last(&s->in, w_iov, next);
     const struct pkt_meta * const m_last = &meta(last);
 
-    warn(WRN,
+    LOG_WRN(
 	 "read %" PRIu " new byte%s %sin %" PRIu " buf%s on %s "
 	 "conn %s strm " FMT_SID,
 	 w_iov_sq_len(&s->in), plural(w_iov_sq_len(&s->in)),
@@ -475,7 +476,7 @@ struct q_conn * q_bind(struct w_engine * const w
     struct q_conn * const c =
         new_conn(w, addr_idx, 0, 0, 0, 0, bswap16(port), 0, 0);
     if (likely(c)) {
-        warn(INF, "bound %s socket to %s%s%s:%u", conn_type(c),
+        LOG_INF( "bound %s socket to %s%s%s:%u", conn_type(c),
              c->sock->ws_af == AF_INET6 ? "[" : "",
              "00::0:0"/*w_ntop(&c->sock->ws_laddr, ip_tmp) contiki-ng only*/,
              c->sock->ws_af == AF_INET6 ? "]" : "", port);
@@ -491,7 +492,7 @@ struct q_conn * q_bind(struct w_engine * const w
 static void cancel_api_call(struct timeout * const api_alarm)
 {
 #ifdef DEBUG_EXTRA
-    warn(DBG, "canceling API call");
+    LOG_DBG( "canceling API call");
 #endif
     timeout_del(api_alarm);
     maybe_api_return(q_ready, 0, 0);
@@ -502,7 +503,7 @@ static void __attribute__((nonnull))
 restart_api_alarm(struct w_engine * const w, const uint64_t nsec)
 {
 #ifdef DEBUG_TIMERS
-    warn(DBG, "next API alarm in %.3f sec", (double)nsec / NS_PER_S);
+    LOG_DBG( "next API alarm in %.3f sec", (double)nsec / NS_PER_S);
 #endif
 
     timeouts_add(ped(w)->wheel, &ped(w)->api_alarm, nsec);
@@ -518,13 +519,13 @@ struct q_stream * q_rsv_stream(struct q_conn * const c, const bool bidi)
         bidi ? &c->tp_peer.max_strms_bidi : &c->tp_peer.max_strms_uni;
 
     if (unlikely(*max_streams == 0))
-        warn(WRN, "peer hasn't allowed %s streams", bidi ? "bi" : "uni");
+        LOG_WRN( "peer hasn't allowed %s streams", bidi ? "bi" : "uni");
 
     dint_t * const next_sid = bidi ? &c->next_sid_bidi : &c->next_sid_uni;
     const uint_t next = (uint_t)(*next_sid >> 2);
     if (unlikely(next >= *max_streams)) {
         // we hit the max stream limit, wait for MAX_STREAMS frame
-        warn(WRN, "need %s MAX_STREAMS increase (%" PRIu " >= %" PRIu ")",
+        LOG_WRN( "need %s MAX_STREAMS increase (%" PRIu " >= %" PRIu ")",
              bidi ? "bi" : "uni", next, *max_streams);
         if (bidi)
             c->sid_blocked_bidi = true;
@@ -532,7 +533,7 @@ struct q_stream * q_rsv_stream(struct q_conn * const c, const bool bidi)
             c->sid_blocked_uni = true;
         //todo: fixme do this for future use in case we want the sensor node to use more streams
         loop_run(c->w, (func_ptr)q_rsv_stream, c, 0); // fixme dden
-        warn(DBG,"-----------max stream ID reached----- loop_run");
+        LOG_DBG("-----------max stream ID reached----- loop_run");
     }
 
     // stream blocking is handled by new_stream
@@ -565,7 +566,7 @@ struct w_engine * q_init(const char * const ifname,
     struct w_engine * const w = w_init(ifname, 0, num_bufs);
     const uint_t num_bufs_ok = w_iov_sq_cnt(&w->iov);
     if (num_bufs_ok < num_bufs)
-        warn(WRN, "only allocated %" PRIu "/%" PRIu32 " warpcore buffers ",
+        LOG_WRN( "only allocated %" PRIu "/%" PRIu32 " warpcore buffers ",
              num_bufs_ok, num_bufs);
 
     w->data = calloc(1, sizeof(struct per_engine_data) + w->mtu);
@@ -649,19 +650,19 @@ struct w_engine * q_init(const char * const ifname,
     timeouts_update(ped(w)->wheel, w_now(CLOCK_MONOTONIC_RAW));
     timeout_setcb(&ped(w)->api_alarm, cancel_api_call, &ped(w)->api_alarm);
 
-    warn(INF, "%s/%s (%s) %s/%s ready", quant_name, w->backend_name,
+    LOG_INF( "%s/%s (%s) %s/%s ready", quant_name, w->backend_name,
          w->backend_variant, quant_version, QUANT_COMMIT_HASH_ABBREV_STR);
-    warn(DBG, "submit bug reports at https://github.com/NTAP/quant/issues");
+    LOG_DBG( "submit bug reports at https://github.com/NTAP/quant/issues");
 
     // initialize TLS context
     init_tls_ctx(conf, ped(w));
 
 #if !defined(NDEBUG) && defined(FUZZER_CORPUS_COLLECTION)
 #ifdef FUZZING
-    warn(CRT, "%s compiled for fuzzing - will not communicate", quant_name);
+    LOG_ERR( "%s compiled for fuzzing - will not communicate", quant_name);
 #else
     // create the directories for exporting fuzzer corpus data
-    warn(NTE, "debug build, storing fuzzer corpus data");
+    LOG_INF( "debug build, storing fuzzer corpus data");
     corpus_pkt_dir = mk_or_open_dir("../corpus_pkt", 0755);
     corpus_frm_dir = mk_or_open_dir("../corpus_frm", 0755);
 #endif
@@ -673,7 +674,7 @@ struct w_engine * q_init(const char * const ifname,
 
 void q_close_stream(struct q_stream * const s)
 {
-    warn(WRN, "closing strm " FMT_SID " on %s conn %s", s->id, conn_type(s->c),
+    LOG_WRN( "closing strm " FMT_SID " on %s conn %s", s->id, conn_type(s->c),
          cid_str(s->c->scid));
     struct w_iov_sq q = w_iov_sq_initializer(q);
     q_write(s, &q, true);
@@ -711,12 +712,12 @@ void q_close(struct q_conn * const c,
 #endif
 )
 {
-    warn(WRN, "closing %s conn %s on %s%s%s:%u w/err %s0x%" PRIx "%s%s%s" NRM,
+    LOG_WRN( "closing %s conn %s on %s%s%s:%u w/err %s0x%" PRIx "%s%s%s" NRM,
          conn_type(c), cid_str(c->scid),
          c->sock->ws_af == AF_INET6 ? "[" : "",
-         wi_ntop(&c->sock->ws_laddr, ip_tmp),
+         wi_ntop(&c->sock->ws_laddr),
          c->sock->ws_laf == AF_INET6 ? "]" : "",
-       uip_ntohs(c->sock->ws_lport), code ? RED : NRM, code, reason ? " (" : "",
+       ntohs(ws_strprt(c->sock->ws_lport)), code ? RED : NRM, code, reason ? " (" : "",
          reason ? reason : "", reason ? ")" : "");
 
     c->err_code = code;
@@ -739,7 +740,7 @@ void q_close(struct q_conn * const c,
     }
 
     loop_run(c->w, (func_ptr)q_close, c, 0); // fixme dden
-    warn(DBG,"------------q_close---loop_run done");
+    LOG_DBG("------------q_close---loop_run done");
 
 done:
 #if !defined(NO_QINFO) && !defined(PARTICLE)
@@ -781,7 +782,7 @@ done:
         conn_info_populate(c);
 
 #ifndef NDEBUG
-#define qinfo_log(...) warn(INF, __VA_ARGS__)
+#define qinfo_log(...) LOG_INF( __VA_ARGS__)
 #else
 #define qinfo_log(...)                                                         \
     do {                                                                       \
@@ -821,7 +822,7 @@ done:
     }
     else
     {
-        warn(DBG,"----Sorry no qlog info");
+        LOG_DBG("----Sorry no qlog info");
     }
 #endif
 
@@ -872,7 +873,7 @@ void q_cleanup(struct w_engine * const w)
     for (uint_t i = 0; i < ped(w)->conf.num_bufs; i++) {
         struct pkt_meta * const m = &ped(w)->pkt_meta[i];
         if (__asan_address_is_poisoned(m) == false) {
-            warn(DBG, "buffer %" PRIu " still in use for %cX'ed %s pkt %" PRIu,
+            LOG_DBG( "buffer %" PRIu " still in use for %cX'ed %s pkt %" PRIu,
                  i, m->txed ? 'T' : 'R',
                  pkt_type_str(m->hdr.flags, &m->hdr.vers),
                  has_pkt_nr(m->hdr.flags, m->hdr.vers) ? m->hdr.nr : 0);
@@ -955,11 +956,11 @@ void write_to_corpus(const int dir, const void * const data, const size_t len)
     const int fd =
         openat(dir, file, O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC, 0644);
     if (fd == -1) {
-        warn(ERR, "cannot open corpus file %s", file);
+        LOG_ERR( "cannot open corpus file %s", file);
         goto done;
     }
     if (write(fd, data, len) == -1) {
-        warn(ERR, "cannot write corpus file %s", file);
+        LOG_ERR( "cannot write corpus file %s", file);
         goto done;
     }
 done:
@@ -972,12 +973,12 @@ bool q_ready(struct w_engine * const w,
              const uint64_t nsec,
              struct q_conn ** const ready)
 {
-    warn(DBG,"-----------q_ready --------");
+    LOG_DBG("-----------q_ready --------");
     if (sl_empty(&c_ready)) {
         if (nsec)
             restart_api_alarm(w, nsec);
 #ifdef DEBUG_EXTRA
-        warn(WRN, "waiting for conn to get ready");
+        LOG_WRN( "waiting for conn to get ready");
 #endif
         loop_run(w, (func_ptr)q_ready, 0, 0); // fixme dden this is only used by the server
     }
@@ -988,13 +989,13 @@ bool q_ready(struct w_engine * const w,
     struct q_conn * /*const*/ c = sl_first(&c_ready);
     if (c) {
 #if defined(DEBUG_EXTRA) && !defined(NO_SERVER)
-        warn(WRN, "%s conn %s ready to %s", conn_type(c), cid_str(c->scid),
+        LOG_WRN( "%s conn %s ready to %s", conn_type(c), cid_str(c->scid),
              c->state == conn_clsd ? "close" : "rx");
 #endif
         sl_remove_head(&c_ready, node_rx_ext);
         c->in_c_ready = false;
     } else
-        warn(WRN, "no conn ready");
+        LOG_WRN( "no conn ready");
     *ready = c;
 done:;
 #ifndef NO_MIGRATION
@@ -1003,10 +1004,10 @@ done:;
     kh_foreach(&conns_by_id, id, c, {
         char cs[CID_STR_LEN];
         cid2str(id, cs, sizeof(cs));
-        warn(ERR, "conns_by_id has %s conn %s -> %s", conn_type(c), cs,
+        LOG_ERR( "conns_by_id has %s conn %s -> %s", conn_type(c), cs,
              cid_str(c->scid));
     });
-    warn(ERR, "conns_by_id size %" PRIu32, kh_size(&conns_by_id));
+    LOG_ERR( "conns_by_id size %" PRIu32, kh_size(&conns_by_id));
 #endif
     return kh_size(&conns_by_id);
 #else
@@ -1030,14 +1031,14 @@ bool q_migrate(struct q_conn * const c,
         // make sure we have a dcid to migrate to
         if (next_cid(&c->dcids, c->dcid->seq) == 0) {
 #ifdef DEBUG_EXTRA
-            warn(DBG, "no new dcid available, can't migrate");
+            LOG_DBG( "no new dcid available, can't migrate");
 #endif
             return false;
         }
         // make sure the handshake has completed
         if (hshk_done(c) == false) {
 #ifdef DEBUG_EXTRA
-            warn(DBG, "handshake not yet complete, can't migrate");
+            LOG_DBG( "handshake not yet complete, can't migrate");
 #endif
             return false;
         }
@@ -1115,7 +1116,7 @@ bool q_migrate(struct q_conn * const c,
         c->sock = new_sock;
     }
 
-    warn(WRN, "%s for %s conn %s from %s%s%s:%u to %s%s%s:%u",
+    LOG_WRN( "%s for %s conn %s from %s%s%s:%u to %s%s%s:%u",
          switch_ip ? "conn migration" : "simulated NAT rebinding", conn_type(c),
          c->scid ? cid_str(c->scid) : "-", old_af == AF_INET6 ? "[" : "",
          old_ip, old_af == AF_INET6 ? "]" : "", old_port,
@@ -1128,7 +1129,7 @@ bool q_migrate(struct q_conn * const c,
     return true;
 
 fail:
-    warn(ERR, "%s failed for %s conn %s from %s%s%s:%u",
+    LOG_ERR( "%s failed for %s conn %s from %s%s%s:%u",
          switch_ip ? "conn migration" : "simulated NAT rebinding", conn_type(c),
          c->scid ? cid_str(c->scid) : "-", old_af == AF_INET6 ? "[" : "",
          old_ip, old_af == AF_INET6 ? "]" : "", old_port);

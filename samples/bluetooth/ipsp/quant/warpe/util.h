@@ -264,16 +264,6 @@ util_rwarn(time_t * const rt0,
     } while (0)
 #else
 
-#define warn(...)                                                              \
-    do {                                                                       \
-    } while (0)
-#define twarn(...)                                                             \
-    do {                                                                       \
-    } while (0)
-#define rwarn(...)                                                             \
-    do {                                                                       \
-    } while (0)
-
 #endif
 
 
@@ -384,6 +374,8 @@ timespec_sub(const struct timespec * const tvp,
 
 extern uint64_t div_mulhi64(const uint64_t a, const uint64_t b);
 
+//#define warn(INF, LOG_INF(
+//#define warn(NTE, LOG_INF(
 
 #ifdef DSTACK
 #if defined(PARTICLE)

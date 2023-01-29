@@ -53,6 +53,8 @@
 #include "tls.h"
 #include "tree.h"
 
+#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+LOG_MODULE_REGISTER(recovery);
 
 static inline bool __attribute__((nonnull))
 in_cong_recovery(const struct q_conn * const c, const uint64_t sent_t)
@@ -120,7 +122,7 @@ void log_cc(struct q_conn * const c)
         (dint_t)c->rec.cur.rttvar - (dint_t)c->rec.prev.rttvar;
     if (delta_in_flight || delta_cwnd || delta_ssthresh || delta_srtt ||
         delta_rttvar) {
-        warn(DBG,
+        LOG_DBG(
              "%s conn %s: in_flight=%" PRIu " (%s%+" PRId NRM "), cwnd" NRM
              "=%" PRIu " (%s%+" PRId NRM "), ssthresh=%" PRIu " (%s%+" PRId NRM
              "), srtt=%.3f (%s%+.3f" NRM "), rttvar=%.3f (%s%+.3f" NRM ")",
@@ -171,7 +173,7 @@ void set_ld_timer(struct q_conn * const c)
     if (is_clnt(c) == false &&
         unlikely(has_pval_wnd(c, MIN_INI_LEN) == false)) {
 #ifdef DEBUG_TIMERS
-        warn(DBG,
+        LOG_DBG(
              "serv at amplification limit, stopping ld_alarm on %s conn %s",
              conn_type(c), cid_str(c->scid));
 #endif
@@ -181,7 +183,7 @@ void set_ld_timer(struct q_conn * const c)
 
     if (unlikely(c->rec.ae_in_flight == 0 && peer_completed_addr_val(c))) {
 #ifdef DEBUG_TIMERS
-        warn(DBG, "no RTX-able pkts in flight, stopping ld_alarm on %s conn %s",
+        LOG_DBG( "no RTX-able pkts in flight, stopping ld_alarm on %s conn %s",
              conn_type(c), cid_str(c->scid));
 #endif
         timeout_del(&c->rec.ld_alarm);
@@ -203,7 +205,7 @@ void set_ld_timer(struct q_conn * const c)
 set_to:;
     if (unlikely(c->rec.ld_alarm_val < now)) {
 #ifdef DEBUG_TIMERS
-        warn(WRN, "LD alarm expired %.3f sec ago",
+        LOG_WRN( "LD alarm expired %.3f sec ago",
              (double)(now - c->rec.ld_alarm_val) / NS_PER_S);
 #endif
         c->rec.ld_alarm_val = 0;
@@ -211,7 +213,7 @@ set_to:;
         c->rec.ld_alarm_val -= now;
 
 #ifdef DEBUG_TIMERS
-    warn(DBG, "LD alarm in %.3f sec on %s conn %s",
+    LOG_DBG( "LD alarm in %.3f sec on %s conn %s",
          (double)c->rec.ld_alarm_val / NS_PER_S, conn_type(c),
          cid_str(c->scid));
 #endif
@@ -246,7 +248,7 @@ in_persistent_cong(struct pn_space * const pn __attribute__((unused)),
     //      c->tp_mine.max_ack_del * NS_PER_MS);
 
     // const struct ival * const i = diet_find(&pn->lost, lg_lost);
-    // warn(DBG,
+    // LOG_DBG(
     //      "lg_lost_ival %" PRIu "-%" PRIu ", lg_lost %" PRIu ", period
     //      %.3f", i->lo, i->hi, lg_lost, cong_period);
     // return i->lo + cong_period < lg_lost;
@@ -292,7 +294,7 @@ void on_pkt_lost(struct pkt_meta * const m, const bool is_lost)
                  m->hdr.nr == (c->pmtud_pkt & 0x3fff) &&
                  m->hdr.type == (c->pmtud_pkt >> 14))) {
         c->rec.max_ups = default_max_ups(c->sock->ws_af);
-        warn(NTE, RED "PMTU %u not validated, using %u" NRM,
+        LOG_INF( RED "PMTU %u not validated, using %u" NRM,
              MIN(w_max_udp_payload(c->sock), (uint16_t)c->tp_peer.max_ups),
              c->rec.max_ups);
         c->pmtud_pkt = UINT16_MAX;
@@ -319,13 +321,13 @@ void on_pkt_lost(struct pkt_meta * const m, const bool is_lost)
         for (i = i - 1; i < FRM_MAX; i++)
             if (bit_isset(FRM_MAX, i, &lost)) {
 #ifdef DEBUG_EXTRA
-                warn(DBG, "%s pkt %" PRIu " lost ctrl frame: 0x%02x",
+                LOG_DBG( "%s pkt %" PRIu " lost ctrl frame: 0x%02x",
                      pkt_type_str(m->hdr.flags, &m->hdr.vers), m->hdr.nr, i);
 #endif
                 switch (i) {
                 case FRM_CID:
 #ifdef DEBUG_EXTRA
-                    warn(ERR, "max_cid_seq_out %" PRIu " -> %" PRIu,
+                    LOG_ERR( "max_cid_seq_out %" PRIu " -> %" PRIu,
                          c->max_cid_seq_out, m->min_cid_seq - 1);
 #endif
                     c->max_cid_seq_out = m->min_cid_seq - 1;
@@ -493,7 +495,7 @@ detect_lost_pkts(struct pn_space * const pn, const bool do_cc)
 
 #ifndef NDEBUG
     if (pos)
-        warn(DBG, "%s %s lost: %s", conn_type(c), pn_type_str[pn->type], tmp);
+        LOG_DBG( "%s %s lost: %s", conn_type(c), pn_type_str[pn->type], tmp);
     poison_scratch(ped(c->w)->scratch, ped(c->w)->scratch_len);
 #endif
 
@@ -526,7 +528,7 @@ static void __attribute__((nonnull)) on_ld_timeout(struct q_conn * const c)
 
     if (pn->loss_t) {
 #ifdef DEBUG_TIMERS
-        warn(DBG, "%s TT alarm on %s conn %s", pn_type_str[pn->type],
+        LOG_DBG( "%s TT alarm on %s conn %s", pn_type_str[pn->type],
              conn_type(c), cid_str(c->scid));
 #endif
         detect_all_lost_pkts(c, true);
@@ -538,18 +540,18 @@ static void __attribute__((nonnull)) on_ld_timeout(struct q_conn * const c)
         // I-D says always 1, but that breaks RTX of Initial+0-RTT
         c->tx_limit = is_clnt(c) && c->try_0rtt ? 2 : 1;
 #ifdef DEBUG_TIMERS
-        warn(DBG, "anti-deadlock RTX on %s conn %s, limit %u", conn_type(c),
+        LOG_DBG( "anti-deadlock RTX on %s conn %s, limit %u", conn_type(c),
              cid_str(c->scid), c->tx_limit);
 #endif
         detect_all_lost_pkts(c, false);
     } else {
         c->tx_limit = 2;
 #ifdef DEBUG_TIMERS
-        warn(DBG, "PTO alarm #%u on %s conn %s, limit %u", c->rec.pto_cnt,
+        LOG_DBG( "PTO alarm #%u on %s conn %s, limit %u", c->rec.pto_cnt,
              conn_type(c), cid_str(c->scid), c->tx_limit);
 #endif
     }
-    warn(DBG,"----------on_ld_timeout---------");
+    LOG_DBG("----------on_ld_timeout---------");
     tx(c);
 
     c->rec.pto_cnt++;
@@ -736,7 +738,7 @@ void on_pkt_acked(struct w_iov * const v, struct pkt_meta * m)
         if (m->has_rtx) {
             // this ACKs a pkt that was since (again) RTX'ed
 #ifdef DEBUG_EXTRA
-            warn(DBG, "%s %s pkt " FMT_PNR_OUT " was RTX'ed as " FMT_PNR_OUT,
+            LOG_DBG( "%s %s pkt " FMT_PNR_OUT " was RTX'ed as " FMT_PNR_OUT,
                  conn_type(c), pkt_type_str(m->hdr.flags, &m->hdr.vers),
                  m->hdr.nr, m_rtx->hdr.nr);
 #endif
@@ -757,7 +759,7 @@ void on_pkt_acked(struct w_iov * const v, struct pkt_meta * m)
 #ifdef DEBUG_EXTRA
         } else {
             // this ACKs the last ("real") RTX of a packet
-            warn(DBG, "pkt nr=%" PRIu " was earlier TX'ed as %" PRIu,
+            LOG_DBG( "pkt nr=%" PRIu " was earlier TX'ed as %" PRIu,
                  has_pkt_nr(m->hdr.flags, m->hdr.vers) ? m->hdr.nr : 0,
                  has_pkt_nr(m_rtx->hdr.flags, m_rtx->hdr.vers) ? m_rtx->hdr.nr
                                                                : 0);

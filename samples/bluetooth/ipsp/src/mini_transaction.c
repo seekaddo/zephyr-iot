@@ -14,18 +14,7 @@
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
 LOG_MODULE_REGISTER(quic_transx);
 #define SERVER_IPV6_ADDR "2001:db8::2"
-typedef struct {
 
-  struct w_engine *w;
-  const char *  req;
-  const char *  peer;
-  struct q_conn *  c;
-  struct q_stream * s ;
-  struct sockaddr  p_addr;
-  uint16_t qrcnt;
-  //uint16_t clean;
-  //quic_udp_callback cl_callback;
-} qmcon;
 
 
 //PROCESS(quic_etranx, "QUIC Transac");
@@ -33,22 +22,31 @@ typedef struct {
 // XXX: change "flash" to 0 to disable 0-RTT:
 static const struct q_conf qc = {0, "flash", 0, 0,
                                  0, 0, 0, 20, false};
-static qmcon tranx_conn;
+ struct qmcon tranx_conn;
 static struct w_iov_sq o = w_iov_sq_initializer(o);
 
 
 //static struct etimer timer;
 #define CLIENT_SEND_INTERVAL      (10 * 1)
 
-void quic_transx(const char * const req, const struct in6_addr  * const peer )
+void quic_transx(const char * const req, const char* peer )
 {
 
-  tranx_conn.peer = SERVER_IPV6_ADDR;
+  tranx_conn.peer = peer;//SERVER_IPV6_ADDR;
   tranx_conn.qrcnt = 1;
-  tranx_conn.req = req;
+  tranx_conn.req = req; // "/index.html"
+  struct in6_addr in6addr_my;
+
+  if (net_addr_pton(AF_INET6,
+		    peer,
+		    &in6addr_my) < 0) {
+	  LOG_ERR("Invalid IPv6 address %s",
+		  CONFIG_NET_CONFIG_MY_IPV6_ADDR);
+	  return ;
+  }
 
   net_ipv6_addr_copy_raw((uint8_t *)&net_sin6(&tranx_conn.p_addr)->sin6_addr,
-			 peer->s6_addr);
+			 in6addr_my.s6_addr);
   net_sin6(&tranx_conn.p_addr)->sin6_family = AF_INET6;
   net_sin6(&tranx_conn.p_addr)->sin6_port = htons(4432); // default server port
 
@@ -66,6 +64,51 @@ void quic_transx(const char * const req, const struct in6_addr  * const peer )
   tranx_conn.c  = q_connect(tranx_conn.w, &tranx_conn.p_addr, tranx_conn.peer,
                            &o, &tranx_conn.s, true,
                            "hq-" DRAFT_VERSION_STRING, &qcc);
+
+  uint16_t cnt = 0;
+  while (1)
+  {
+
+	  if (tranx_conn.c) {
+		  LOG_DBG("==============Get Response================================");
+		  struct w_iov_sq i = w_iov_sq_initializer(i);
+		  q_read_stream(tranx_conn.s, &i, true);
+		  const uint16_t len = w_iov_sq_len(&i);
+		  LOG_INF("retrieved %" PRIu32 " bytes", len);
+		  struct w_iov *const sv = sq_first(&i);
+		  LOG_INF("Payload %d bytes->\n%s", sv->len, sv->buf);
+
+		  LOG_DBG("==============Get Done================================");
+		  q_free(&i);
+		  q_free_stream(tranx_conn.s);
+		  if(cnt > 1)
+			  break ;
+
+		  LOG_DBG("==============Free Done================================");
+		  //sleep(4); // sleep for some time before new request
+
+		  //todo: here we sent a fresh new request, Using old connection but new stream
+		  LOG_DBG("==============New Stream Pointer ================================");
+		  tranx_conn.s = q_rsv_stream(tranx_conn.c, true); // request a new stream
+		  LOG_DBG("==============New Stream Pointer Done ================================");
+		  q_alloc(tranx_conn.w, &o, 0, AF_INET6, 512); // allocate memory for the stream
+		  struct w_iov * const vv = sq_first(&o);
+		  vv->len = sprintf((char *)vv->buf, "GET %s\r\n", tranx_conn.req);
+		  q_write(tranx_conn.s, &o, true); // send new request on the same stream 0
+
+		  cnt += 1;
+
+	  } else {
+		  LOG_ERR( "could not retrieve %s", v->buf);
+		  cnt += 1;
+		  break ;
+	  }
+  }
+
+  q_free(&o);
+  q_close(tranx_conn.c, 0, "No connection");
+
+  q_cleanup(tranx_conn.w);
 
 }
 #if 0
@@ -158,10 +201,11 @@ PROCESS_THREAD(quic_etranx, ev, data)
 #endif
 
 
-void quic_init_Wegine(void)
+void quic_init_Wegine(struct net_context *u6_ctxt)
 {
   LOG_INF("q_init: init wengine \n");
   tranx_conn.w = q_init("uIP", &qc);
+  tranx_conn.w->u6_rec->cntx = u6_ctxt;
 
   LOG_INF("quic_etranx:  q_init done and ready for quic conn \n");
   tranx_conn.c = 0;

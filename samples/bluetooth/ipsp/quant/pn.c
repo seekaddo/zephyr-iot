@@ -41,6 +41,8 @@
 #include "cid.h"
 #endif
 
+#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+LOG_MODULE_REGISTER(pn);
 
 void pm_by_nr_del(khash_t(pm_by_nr) * const pbn,
                   const struct pkt_meta * const p)
@@ -133,7 +135,7 @@ void abandon_pn(struct pn_space * const pn)
 {
     assure(pn->type != pn_data, "cannot abandon pn_data");
 
-    warn(DBG, "abandoning %s %s processing", conn_type(pn->c),
+    LOG_DBG( "abandoning %s %s processing", conn_type(pn->c),
          pn_type_str[pn->type]);
 
     struct q_conn * const c = pn->c;
@@ -157,7 +159,7 @@ ack_t needs_ack(const struct pn_space * const pn)
     // send a forced ACK when the flag is set
     if (unlikely(pn->imm_ack)) {
 #ifdef DEBUG_EXTRA
-        warn(DBG, "%s conn %s: %s imm_ack: forced", conn_type(pn->c),
+        LOG_DBG( "%s conn %s: %s imm_ack: forced", conn_type(pn->c),
              cid_str(pn->c->scid), pn_type_str[pn->type]);
 #endif
         return imm_ack;
@@ -169,7 +171,7 @@ ack_t needs_ack(const struct pn_space * const pn)
          !diet_empty(&pn->recv_all));
     if (rxed_or_lost == false) {
 #ifdef DEBUG_EXTRA
-        warn(DBG, "%s conn %s: %s no_ack: rxed_or_lost == false",
+        LOG_DBG( "%s conn %s: %s no_ack: rxed_or_lost == false",
              conn_type(pn->c), cid_str(pn->c->scid), pn_type_str[pn->type]);
 #endif
         return no_ack;
@@ -179,7 +181,7 @@ ack_t needs_ack(const struct pn_space * const pn)
     const bool rxed_ack_eliciting = is_ack_eliciting(&pn->rx_frames);
     if (rxed_ack_eliciting == false) {
 #ifdef DEBUG_EXTRA
-        warn(DBG, "%s conn %s: %s grat_ack: rxed_ack_eliciting == false",
+        LOG_DBG( "%s conn %s: %s grat_ack: rxed_ack_eliciting == false",
              conn_type(pn->c), cid_str(pn->c->scid), pn_type_str[pn->type]);
 #endif
         return grat_ack;
@@ -189,7 +191,7 @@ ack_t needs_ack(const struct pn_space * const pn)
     const bool in_hshk = pn->type != pn_data || has_frm(pn->rx_frames, FRM_CRY);
     if (unlikely(in_hshk)) {
 #ifdef DEBUG_EXTRA
-        warn(DBG, "%s conn %s: %s imm_ack: in_hshk", conn_type(pn->c),
+        LOG_DBG( "%s conn %s: %s imm_ack: in_hshk", conn_type(pn->c),
              cid_str(pn->c->scid), pn_type_str[pn->type]);
 #endif
         return imm_ack;
@@ -200,7 +202,7 @@ ack_t needs_ack(const struct pn_space * const pn)
                          pn->pkts_lost_since_last_ack_tx > 0;
     if (std_ack) {
 #ifdef DEBUG_EXTRA
-        warn(DBG, "%s conn %s: %s imm_ack: std_ack", conn_type(pn->c),
+        LOG_DBG( "%s conn %s: %s imm_ack: std_ack", conn_type(pn->c),
              cid_str(pn->c->scid), pn_type_str[pn->type]);
 #endif
         return imm_ack;
@@ -208,7 +210,7 @@ ack_t needs_ack(const struct pn_space * const pn)
 
     // otherwise, time to arm the ACK timer
 #ifdef DEBUG_EXTRA
-    warn(DBG, "%s conn %s: %s del_ack", conn_type(pn->c), cid_str(pn->c->scid),
+    LOG_DBG( "%s conn %s: %s del_ack", conn_type(pn->c), cid_str(pn->c->scid),
          pn_type_str[pn->type]);
 #endif
     return del_ack;
