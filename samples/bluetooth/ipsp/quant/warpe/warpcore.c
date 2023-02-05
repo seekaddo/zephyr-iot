@@ -254,10 +254,12 @@ uint_t w_iov_sq_len(const struct w_iov_sq * const q)
 
 int w_connect(struct w_sock * const s, const struct sockaddr * const peer)
 {
+/*
     if (unlikely(w_connected(s))) {
         LOG_ERR( "socket already connected");
         return EADDRINUSE;
     }
+*/
 
     backend_preconnect(s);
     int e = 0;
@@ -474,8 +476,10 @@ struct w_engine * w_init(const char * const ifname,
 
 #ifndef NDEBUG
     // put the link local address here
+    extern struct sockaddr myAddr;
     LOG_INF( "%s MAC addr %s, MTU %d, speed %" PRIu32 "G", w->ifname,
-         "fd00:00"/*eth_ntoa(&w->mac, eth_tmp, ETH_STRLEN)*/, w->mtu, w->mbps / 1000);
+	    net_sprint_addr(AF_INET6,(uint8_t *)&net_sin6(&myAddr)->sin6_addr)
+		    , w->mtu, w->mbps / 1000);
 #if  0
     for (uint16_t idx = 0; idx < w->addr_cnt; idx++) {
         struct w_ifaddr * const ia = &w->ifaddr[idx];

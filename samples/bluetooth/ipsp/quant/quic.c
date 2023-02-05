@@ -315,7 +315,7 @@ struct q_conn * q_connect(struct w_engine * const w,
          ntohs(ws_strprt(*peer)));
     conn_to_state(c, conn_opng);
 
-    //loop_run(w, (func_ptr)q_connect, c, 0);
+    loop_run(w, (func_ptr)q_connect, c, 0);
     LOG_DBG("----------loop_run done q_connect----");
 
     if (fin && early_data_stream && *early_data_stream &&

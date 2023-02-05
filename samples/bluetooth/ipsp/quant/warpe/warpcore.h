@@ -279,7 +279,7 @@ struct w_engine {
     const char * backend_name;    ///< Name of the backend in @p b.
     const char * backend_variant; ///< Name of the backend variant in @p b.
     //struct net_context *u6_contxt; // udp context used for receiving and sending net pkt
-    struct net_rec *u6_rec;
+    struct net_rec u6_rec;
 
     /// Pointer to generic user data (not used by warpcore.)
     void * data;
@@ -511,12 +511,12 @@ w_get_sockopt(const struct w_sock * const s)
 ///
 /// @return     True when connected, zero otherwise.
 ///
-extern uint8_t udp_connected;
-static inline bool __attribute__((nonnull, no_instrument_function))
+
+/*static inline bool __attribute__((nonnull, no_instrument_function))
 w_connected(const struct w_sock * const s)
 {
     return udp_connected;
-}
+}*/
 
 #if 0
 static inline bool __attribute__((nonnull))

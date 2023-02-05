@@ -22,9 +22,18 @@ LOG_MODULE_REGISTER(quic_transx);
 // XXX: change "flash" to 0 to disable 0-RTT:
 static const struct q_conf qc = {0, "flash", 0, 0,
                                  0, 0, 0, 20, false};
- struct qmcon tranx_conn;
+struct qmcon tranx_conn;
 static struct w_iov_sq o = w_iov_sq_initializer(o);
 
+
+static inline void pkt_sent(struct net_context *context,
+			    int status,
+			    void *user_data)
+{
+	if (status >= 0) {
+		LOG_DBG("Sent %d bytes", status);
+	}
+}
 
 //static struct etimer timer;
 #define CLIENT_SEND_INTERVAL      (10 * 1)
@@ -55,6 +64,22 @@ void quic_transx(const char * const req, const char* peer )
   q_alloc(tranx_conn.w, &o, 0, AF_INET6, 512); // af family is ipv6
   struct w_iov * const v = sq_first(&o);
   v->len = sprintf((char *)v->buf, "GET %s\r\n", tranx_conn.req);
+#if 0
+  ///############### testing
+  static uint8_t buf_tx[NET_IPV6_MTU + 20];
+  //snprintf(buf_tx, v->len,"%s",v->buf);
+  memset(buf_tx,45, 250);
+  int ret = net_context_sendto(tranx_conn.w->u6_rec.cntx, buf_tx, 200 , &tranx_conn.p_addr,
+			       sizeof(struct sockaddr_in6) ,
+			       pkt_sent, K_NO_WAIT, buf_tx);
+  if (ret < 0) {
+	  LOG_ERR("Cannot send data to peer (%d)", ret);
+  }
+
+  do{
+	  k_sleep(K_SECONDS(70));
+  } while (1);
+#endif
 
   static const struct q_conn_conf qcc = {
       30, 0, 0, 0, 0,
@@ -64,6 +89,10 @@ void quic_transx(const char * const req, const char* peer )
   tranx_conn.c  = q_connect(tranx_conn.w, &tranx_conn.p_addr, tranx_conn.peer,
                            &o, &tranx_conn.s, true,
                            "hq-" DRAFT_VERSION_STRING, &qcc);
+
+do{
+	k_sleep(K_SECONDS(70));
+} while (1);
 
   uint16_t cnt = 0;
   while (1)
@@ -205,7 +234,7 @@ void quic_init_Wegine(struct net_context *u6_ctxt)
 {
   LOG_INF("q_init: init wengine \n");
   tranx_conn.w = q_init("uIP", &qc);
-  tranx_conn.w->u6_rec->cntx = u6_ctxt;
+  tranx_conn.w->u6_rec.cntx = u6_ctxt;
 
   LOG_INF("quic_etranx:  q_init done and ready for quic conn \n");
   tranx_conn.c = 0;

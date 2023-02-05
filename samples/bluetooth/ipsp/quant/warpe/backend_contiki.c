@@ -68,6 +68,7 @@ LOG_MODULE_REGISTER(quic_backend);
 extern struct sockaddr myAddr;
 // waiting for udp pkt after sent pkt
 struct k_sem waitpkt_lock;
+extern uint8_t udp_connected;
 extern char *net_sprint_addr(sa_family_t af, const void *addr);
 
 void w_set_sockopt(struct w_sock *const s, const struct w_sockopt *const opt)
@@ -105,7 +106,7 @@ void backend_init(struct w_engine *const w, const uint32_t nbufs)
 	ensure((w->mem = calloc(nbufs, max_buf_len(w))) != 0,
 	       "cannot alloc %" PRIu32 " * %u buf mem", nbufs, max_buf_len(w));
 	ensure((w->bufs = calloc(nbufs, sizeof(*w->bufs))) != 0, "cannot alloc bufs");
-	w->backend_name = "contiki-ng";
+	w->backend_name = "zephyr-os";
 
 	for (uint32_t i = 0; i < nbufs; i++) {
 		init_iov(w, &w->bufs[i], i);
@@ -189,19 +190,38 @@ int backend_connect(struct w_sock *const s)
 /// @param      s     w_sock socket to transmit over.
 /// @param      o     w_iov_sq to send.
 ///
+extern struct qmcon tranx_conn;
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 void w_tx(struct w_sock *const s, struct w_iov_sq *const o)
 {
-	const bool is_connected = w_connected(s);
+	const bool is_connected = udp_connected;
 
 	struct w_iov *v = sq_first(o);
+	int ret;
 	while (v) {
 		if (is_connected == false) {
 			LOG_ERR("uIP-udp not connected ");
 			break;
 		}
 
-		if (unlikely(quic_sendto(s->w->u6_rec, &v->saddr, v->buf, v->len) < 0))
-			LOG_ERR( "sendto returned %d (%s)", errno, strerror(errno));
+		//static uint8_t buf_tx[NET_IPV6_MTU+20];
+		//snprintf(buf_tx, v->len,"%s",v->buf);
+		//memset(buf_tx,45, 300);
+		LOG_INF("Now sending buffer of size (%d)", v->len);
+
+		ret = net_context_sendto(tranx_conn.w->u6_rec.cntx,  v->buf,  v->len, &v->saddr,
+					 sizeof(struct sockaddr_in6),
+					 pkt_sent, K_NO_WAIT, NULL);
+
+		if (ret < 0) {
+			LOG_ERR("Cannot send data to peer (%d) %s", ret, strerror(ret));
+		}
+
+		/*if (unlikely(quic_sendto(&s->w->u6_rec, &v->saddr, v->buf, v->len) < 0))
+			LOG_ERR("Cannot send data to peer (%d)", ret);*/
 		v = sq_next(v, next);
 	};
 }
@@ -210,10 +230,10 @@ int
 quic_sendto(struct net_rec *u6rec, struct sockaddr *dst_addr, uint8_t *buf_tx, uint16_t len)
 {
 	int ret;
-	ret = net_context_sendto(u6rec->cntx, buf_tx, len, dst_addr,
+	ret = net_context_sendto(tranx_conn.w->u6_rec.cntx, buf_tx, len, dst_addr,
 						    sizeof(struct sockaddr_in6),
 				 pkt_sent, K_NO_WAIT, u6rec->user_data);
-	LOG_INF("-------------sent UDP ret: %d dest: %s port: %d",
+	LOG_INF("UDP ret: %d dest: %s port: %d",
 		ret, net_sprint_addr(AF_INET6,(uint8_t *)&net_sin6(dst_addr)->sin6_addr),
 		ntohs(net_sin6(dst_addr)->sin6_port) );
 	if (ret < 0) {
@@ -240,14 +260,14 @@ void w_rx(struct w_sock *const s, struct w_iov_sq *const i)
 		if (unlikely(v == 0))
 			return;
 
-		v->len = recvfr(s->w->u6_rec, v->buf );
+		v->len = recvfr(&s->w->u6_rec, v->buf );
 
 		if (likely(v->len > 0)) {
 			// v->renpt = sa_port(&sa);
 			//set_endpoint(&v->saddr);
-			v->saddr = s->w->u6_rec->src_addr;
+			v->saddr = s->w->u6_rec.src_addr;
 			//v->sport = s->w->u6_rec->src_port;
-			v->ttl = s->w->u6_rec->pkt->ipv6_hop_limit; // ttl or pkt->ipv6_hop_limit
+			v->ttl = s->w->u6_rec.pkt->ipv6_hop_limit; // ttl or pkt->ipv6_hop_limit
 			// w_to_waddr(&v->wv_addr, (struct sockaddr *)&sa); // server address
 			// wv_addr
 			sq_insert_tail(i, v, next);

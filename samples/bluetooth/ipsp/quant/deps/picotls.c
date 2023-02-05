@@ -115,6 +115,8 @@
 #define PTLS_PROBE(LABEL, tls, ...)
 #endif
 
+#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+LOG_MODULE_REGISTER(picotls);
 
 //todo: copy to contiki-ng
 /**
