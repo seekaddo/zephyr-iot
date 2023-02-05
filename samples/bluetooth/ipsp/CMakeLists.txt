@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.20.0)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(ipsp)
 
-if (0)
+if (1)
     target_sources(app PRIVATE
             src/main.c
             )
@@ -28,7 +28,11 @@ else()
     #set (BUIDFLAG1 ) # -D'alloca(x)=(void*)&x')
     #    -std=c11 -Os -fstack-usage -foptimize-strlen -ffast-math)
     #add_compile_options(-std=c11 -Os -fstack-usage -foptimize-strlen -ffast-math "-D'alloca(x)=(void*)&x'")
-    add_compile_options(-std=c11 -Os -fstack-usage -foptimize-strlen -ffast-math "-D'alloca(x)=(void*)&x'")
+    add_compile_options(-std=c11 -Os -fstack-usage -foptimize-strlen -Wno-strict-prototypes
+            -Wno-sign-compare -Wno-maybe-uninitialized
+            -ffast-math -Wno-unknown-pragmas
+            -Wno-missing-field-initializers
+            -Wno-cast-align "-D'alloca(x)=(void*)&x'")
     target_sources(app PRIVATE
             src/main.c
             src/mini_transaction.c
