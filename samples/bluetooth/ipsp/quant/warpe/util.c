@@ -34,10 +34,10 @@
 #include <stdlib.h>
 #include <string.h>
 //#include <sys/time.h>
-#include <zephyr/posix/sys/time.h>
-#include <zephyr/posix/time.h>
-#include <zephyr/posix/time.h>
-#include <zephyr/kernel.h>
+#include <posix/sys/time.h>
+#include <posix/time.h>
+#include <posix/time.h>
+#include <kernel.h>
 
 #if defined(DSTACK)
 #include <sys/param.h>
@@ -48,6 +48,9 @@
 #endif
 
 #include "warpcore.h"
+#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+LOG_MODULE_REGISTER(util);
+
 #undef RIOT_VERSION
 
 #if defined(HAVE_BACKTRACE) || defined(DSTACK)
@@ -154,10 +157,6 @@ static struct timeval util_epoch;
 
 #if !defined(PARTICLE) && !defined(RIOT_VERSION)
 
-
-
-#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
-LOG_MODULE_REGISTER(util);
 
 /// Destructor function to clean up after the debug framework, before the
 /// program exits.

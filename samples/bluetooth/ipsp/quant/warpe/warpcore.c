@@ -267,7 +267,7 @@ int w_connect(struct w_sock * const s, const struct sockaddr * const peer)
     //uip_ipaddr_copy(&s->ws_raddr, &peer->ipaddr);
     //s->ws_rport = peer->port;
 
-    net_ipv6_addr_copy_raw((uint8_t *)&net_sin6(&s->ws_raddr)->sin6_addr,
+    net_ipaddr_copy((uint8_t *)&net_sin6(&s->ws_raddr)->sin6_addr,
 			   (uint8_t *)&net_sin6(peer)->sin6_addr);
     net_sin6(&s->ws_raddr)->sin6_family = AF_INET6;
     net_sin6(&s->ws_raddr)->sin6_port = net_sin6(peer)->sin6_port;
@@ -284,7 +284,7 @@ int w_connect(struct w_sock * const s, const struct sockaddr * const peer)
 }
 char *wi_ntop( const struct sockaddr *addr)
 {
-    return net_sprint_addr(AF_INET6,(uint8_t *)&net_sin6(addr)->sin6_addr);
+    return log_strdup(net_sprint_addr(AF_INET6,(uint8_t *)&net_sin6(addr)->sin6_addr));
 }
 
 
@@ -314,7 +314,7 @@ struct w_sock * w_bind(struct w_engine * const w,
     s->ws_scope = 0;
     //GetHAddr(&s->itup.laddr);  //todo: get the correct one when running prodection code
 
-    net_ipv6_addr_copy_raw((uint8_t *)&net_sin6(&s->itup.laddr)->sin6_addr,
+    net_ipaddr_copy((uint8_t *)&net_sin6(&s->itup.laddr)->sin6_addr,
 			   (uint8_t *)&net_sin6(w->b->udp_cn)->sin6_addr);
 
     //s->ws_loc =(struct w_sockaddr){.addr = w->ifaddr[addr_idx].addr, .port = port};
@@ -477,8 +477,8 @@ struct w_engine * w_init(const char * const ifname,
 #ifndef NDEBUG
     // put the link local address here
     extern struct sockaddr myAddr;
-    LOG_INF( "%s MAC addr %s, MTU %d, speed %" PRIu32 "G", w->ifname,
-	    net_sprint_addr(AF_INET6,(uint8_t *)&net_sin6(&myAddr)->sin6_addr)
+    LOG_INF( "%s MAC addr %s, MTU %d, speed %" PRIu32 "G", log_strdup(w->ifname),
+	    log_strdup(net_sprint_addr(AF_INET6,(uint8_t *)&net_sin6(&myAddr)->sin6_addr))
 		    , w->mtu, w->mbps / 1000);
 #if  0
     for (uint16_t idx = 0; idx < w->addr_cnt; idx++) {

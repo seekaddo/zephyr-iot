@@ -425,7 +425,7 @@ bool q_read_stream(struct q_stream * const s,
 	     cid_str(c->scid), s->id);
     again:
 	loop_run(c->w, (func_ptr)q_read_stream, c, s);
-	LOG_DBG("----------------q_read_stream---loop_run done");
+	//LOG_DBG("----------------q_read_stream---loop_run done");
     }
 
     if (sq_empty(&s->in))

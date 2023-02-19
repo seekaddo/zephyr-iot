@@ -25,6 +25,11 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+#include <logging/log.h>
+
+#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+LOG_MODULE_REGISTER(frame);
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -62,6 +67,9 @@
 #include "tree.h"
 #endif
 
+//#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+//LOG_MODULE_REGISTER(frame);
+
 
 #ifndef NDEBUG
 #define pcr_str(chlg_resp)                                                     \
@@ -70,8 +78,7 @@
             hex_str_len(PATH_CHLG_LEN))
 #endif
 
-#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
-LOG_MODULE_REGISTER(frame);
+
 
 static void track_frame(struct pkt_meta * const m,
                         struct q_conn_info * const ci
@@ -155,26 +162,30 @@ void log_stream_or_crypto_frame(const bool rtx,
         [sdt_ign] = YEL "ign" NRM};
 
     if (sid >= 0)
-        LOG_INF(
-             "%sSTREAM" NRM " 0x%02x=%s%s%s%s%s id=" FMT_SID "/%" PRIu
-             " off=%" PRIu "/%" PRIu " len=%u coff=%" PRIu "/%" PRIu " %s[%s]",
-             in ? FRAM_IN : FRAM_OUT, fl, is_set(F_STREAM_FIN, fl) ? "FIN" : "",
-             is_set(F_STREAM_FIN, fl) &&
-                     (is_set(F_STREAM_LEN, fl) || is_set(F_STREAM_OFF, fl))
-                 ? "|"
-                 : "",
-             is_set(F_STREAM_LEN, fl) ? "LEN" : "",
-             is_set(F_STREAM_LEN, fl) && is_set(F_STREAM_OFF, fl) ? "|" : "",
-             is_set(F_STREAM_OFF, fl) ? "OFF" : "", sid, max_sid(sid, c),
-             m->strm_off,
-             in ? (s ? s->in_data_max : 0) : (s ? s->out_data_max : 0),
-             m->strm_data_len, in ? c->in_data_str : c->out_data_str,
-             in ? c->tp_mine.max_data : c->tp_peer.max_data,
-             rtx ? REV BLD GRN "[RTX]" NRM " " : "", kind_str[kind]);
+    {
+	    LOG_INF("%sSTREAM" NRM " 0x%02x=%s /%llu",
+		    in ? FRAM_IN : FRAM_OUT, fl, is_set(F_STREAM_FIN, fl) ? "FIN" : "-");
+    }
+//        LOG_INF(
+//             "%sSTREAM" NRM " 0x%02x=%s%s%s%s%s id=" FMT_SID "/%" PRIu
+//             " off=%" PRIu "/%" PRIu " len=%u coff=%" PRIu "/%" PRIu " %s[%s]",
+//             in ? FRAM_IN : FRAM_OUT, fl, is_set(F_STREAM_FIN, fl) ? "FIN" : "-",
+//             is_set(F_STREAM_FIN, fl) &&
+//                     (is_set(F_STREAM_LEN, fl) || is_set(F_STREAM_OFF, fl))
+//                 ? "|"
+//                 : "",
+//             is_set(F_STREAM_LEN, fl) ? "LEN" : "-",
+//             is_set(F_STREAM_LEN, fl) && is_set(F_STREAM_OFF, fl) ? "|" : "-",
+//             is_set(F_STREAM_OFF, fl) ? "OFF" : "-", sid, max_sid(sid, c),
+//             m->strm_off,
+//             in ? (s ? s->in_data_max : 0) : (s ? s->out_data_max : 0),
+//             m->strm_data_len, in ? c->in_data_str : c->out_data_str,
+//             in ? c->tp_mine.max_data : c->tp_peer.max_data,
+//             rtx ? REV BLD GRN "[RTX]" NRM " " : "-", kind_str[kind]);
     else
-        LOG_INF( "%sCRYPTO" NRM " off=%" PRIu " len=%u %s[%s]",
+    { LOG_INF( "%sCRYPTO" NRM " off=%" PRIu " len=%u %s[%s]",
              in ? FRAM_IN : FRAM_OUT, m->strm_off, m->strm_data_len,
-             rtx ? REV BLD GRN "[RTX]" NRM " " : "", kind_str[kind]);
+             rtx ? REV BLD GRN "[RTX]" NRM " " : "-", kind_str[kind]);}
 }
 #endif
 

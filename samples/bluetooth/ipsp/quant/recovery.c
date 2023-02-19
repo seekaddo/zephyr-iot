@@ -25,11 +25,16 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+//#include <logging/log.h>
+
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 //#include <sys/param.h>
 #include <time.h>
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 
 #ifndef NDEBUG
 #include <stdio.h>
@@ -53,8 +58,9 @@
 #include "tls.h"
 #include "tree.h"
 
-#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
-LOG_MODULE_REGISTER(recovery);
+//#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+//LOG_MODULE_REGISTER(recovery);
+LOG_MODULE_REGISTER(rcvy_ctx, CONFIG_LOG_DEFAULT_LEVEL);
 
 static inline bool __attribute__((nonnull))
 in_cong_recovery(const struct q_conn * const c, const uint64_t sent_t)
@@ -122,21 +128,22 @@ void log_cc(struct q_conn * const c)
         (dint_t)c->rec.cur.rttvar - (dint_t)c->rec.prev.rttvar;
     if (delta_in_flight || delta_cwnd || delta_ssthresh || delta_srtt ||
         delta_rttvar) {
-        LOG_DBG(
-             "%s conn %s: in_flight=%" PRIu " (%s%+" PRId NRM "), cwnd" NRM
-             "=%" PRIu " (%s%+" PRId NRM "), ssthresh=%" PRIu " (%s%+" PRId NRM
-             "), srtt=%.3f (%s%+.3f" NRM "), rttvar=%.3f (%s%+.3f" NRM ")",
-             conn_type(c), cid_str(c->scid), c->rec.cur.in_flight,
-             delta_in_flight > 0 ? GRN : (delta_in_flight < 0 ? RED : ""),
-             delta_in_flight, c->rec.cur.cwnd,
-             delta_cwnd > 0 ? GRN : (delta_cwnd < 0 ? RED : ""), delta_cwnd,
-             ssthresh,
-             delta_ssthresh > 0 ? GRN : (delta_ssthresh < 0 ? RED : ""),
-             delta_ssthresh, (float)c->rec.cur.srtt / US_PER_S,
-             delta_srtt > 0 ? GRN : (delta_srtt < 0 ? RED : ""),
-             (float)delta_srtt / US_PER_S, (float)c->rec.cur.rttvar / US_PER_S,
-             delta_rttvar > 0 ? GRN : (delta_rttvar < 0 ? RED : ""),
-             (float)delta_rttvar / US_PER_S);
+	LOG_DBG("%s conn %s: in_flight=%llu ", conn_type(c), cid_str(c->scid), c->rec.cur.in_flight);
+//        LOG_DBG(
+//             "%s conn %s: in_flight=%" PRIu " (%s%" PRId NRM "), cwnd" NRM
+//             "=%" PRIu " (%s%" PRId NRM "), ssthresh=%" PRIu " (%s%" PRId NRM
+//             "), srtt=%.3f (%s%.3f" NRM "), rttvar=%.3f (%s%.3f" NRM ")",
+//             conn_type(c), cid_str(c->scid), c->rec.cur.in_flight,
+//             delta_in_flight > 0 ? GRN : (delta_in_flight < 0 ? RED : "-"),
+//             delta_in_flight, c->rec.cur.cwnd,
+//             delta_cwnd > 0 ? GRN : (delta_cwnd < 0 ? RED : "-"), delta_cwnd,
+//             ssthresh,
+//             delta_ssthresh > 0 ? GRN : (delta_ssthresh < 0 ? RED : "-"),
+//             delta_ssthresh, (float)c->rec.cur.srtt / US_PER_S,
+//             delta_srtt > 0 ? GRN : (delta_srtt < 0 ? RED : "-"),
+//             (float)delta_srtt / US_PER_S, (float)c->rec.cur.rttvar / US_PER_S,
+//             delta_rttvar > 0 ? GRN : (delta_rttvar < 0 ? RED : "-"),
+//             (float)delta_rttvar / US_PER_S);
     }
 
     qlog_recovery(rec_mu, "default", c, 0);

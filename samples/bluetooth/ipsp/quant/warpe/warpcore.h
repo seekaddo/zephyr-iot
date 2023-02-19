@@ -64,6 +64,10 @@ extern "C" {
 #include <net/socket.h>
 #include <posix/time.h>
 #include <posix/sys/time.h>
+#include <zephyr/types.h>
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
+
 #ifndef CLOCK_MONOTONIC_RAW
 #define CLOCK_MONOTONIC_RAW 5 // zephyr only
 #endif
@@ -227,6 +231,10 @@ struct eth_addr {
 #else
 #define IFNAMSIZ NETIF_NAMELENMAX
 #endif
+#endif
+
+#ifndef IFNAMSIZ
+#define IFNAMSIZ 48
 #endif
 
 struct w_socktup
@@ -588,8 +596,8 @@ w_rx(struct w_sock * const s, struct w_iov_sq * const i);
 extern uint16_t __attribute__((nonnull))
 recvfr(struct net_rec *u6_rec, uint8_t *b);
 
-extern int __attribute__((nonnull(1,2,3)))
-quic_sendto(struct net_rec *u6rec, struct sockaddr *dst_addr, uint8_t *buf, uint16_t len);
+//extern int __attribute__((nonnull(1,2,3)))
+//quic_sendto(struct net_rec *u6rec, struct sockaddr *dst_addr, uint8_t *buf, uint16_t len);
 
 extern void __attribute__((nonnull)) w_nic_tx(struct w_engine * const w);
 

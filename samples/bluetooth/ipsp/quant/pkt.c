@@ -25,6 +25,9 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+//#include <logging/log.h>
+
+
 #include <inttypes.h>
 #include <stdint.h>
 #include <string.h>
@@ -53,9 +56,9 @@
 #include "stream.h"
 #include "tls.h"
 
-#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
-LOG_MODULE_REGISTER(pkt);
-
+//#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+//LOG_MODULE_REGISTER(pkt);
+LOG_MODULE_REGISTER(pkt_ctx, CONFIG_LOG_DEFAULT_LEVEL);
 
 #ifndef NDEBUG
 extern char *net_sprint_addr(sa_family_t af, const void *addr);
@@ -72,18 +75,18 @@ void log_pkt(const char * const dir,
 
     mk_cid_str(NTE, &m->hdr.dcid, dcid_str);
     mk_cid_str(NTE, &m->hdr.scid, scid_str);
-    const char * const tok_str = tok_len ? tok_str(tok, tok_len) : "";
+    const char * const tok_str = tok_len ? tok_str(tok, tok_len) : "-";
     const char * const rit_str = rit ? rit_str(rit) : "";
-    const char * const lbr = (ws_straf(v->wv_af) == AF_INET6) ? "[" : "";
-    const char * const rbr = (ws_straf(v->wv_af) == AF_INET6) ? "]" : "";
+    const char * const lbr = (ws_straf(v->wv_af) == AF_INET6) ? "[" : "-";
+    const char * const rbr = (ws_straf(v->wv_af) == AF_INET6) ? "]" : "-";
 
     if (*dir == 'R') {
-        static const char * const ecn_str[] = {[ECN_NOT] = "",
+        static const char * const ecn_str[] = {[ECN_NOT] = "-",
                                                [ECN_ECT1] = "ECT1",
                                                [ECN_ECT0] = "ECT0",
                                                [ECN_CE] = "CE"};
         const uint8_t ecn_mark = v->flags & ECN_MASK;
-        const char * const ecn = ecn_mark ? " ecn=" : "";
+        const char * const ecn = ecn_mark ? " ecn=" : "-";
         if (is_lh(m->hdr.flags)) {
             if (m->hdr.vers == 0)
                 LOG_INF(
@@ -100,14 +103,16 @@ void log_pkt(const char * const dir,
                       m->hdr.flags, pts, m->hdr.vers, dcid_str, scid_str,
                       tok_str, rit_str);
             else if (m->hdr.type == LH_INIT)
-                LOG_INF(
-                      BLD BLU "RX" NRM " from=%s%s%s:%u len=%u%s%s 0x%02x=" BLU
-                              "%s " NRM "vers=0x%0" PRIx32
-                              " dcid=%s scid=%s%s%s len=%u nr=" BLU
-                              "%" PRIu NRM,
-                      lbr, ip, rbr, port, v->len, ecn, ecn_str[ecn_mark],
-                      m->hdr.flags, pts, m->hdr.vers, dcid_str, scid_str,
-                      tok_len ? " tok=" : "", tok_str, m->hdr.len, m->hdr.nr);
+		           LOG_INF(BLD BLU "RX" NRM " from=%s%s%s:%u len=%u%s%s 0x%02x=",
+			         lbr, ip, rbr, port, v->len, ecn, ecn_str[ecn_mark], m->hdr.flags);
+//                LOG_INF(
+//                      BLD BLU "RX" NRM " from=%s%s%s:%u len=%u%s%s 0x%02x=" BLU
+//                              "%s " NRM "vers=0x%0" PRIx32
+//                              " dcid=%s scid=%s%s%s len=%u nr=" BLU
+//                              "%" PRIu NRM,
+//                      lbr, ip, rbr, port, v->len, ecn, ecn_str[ecn_mark],
+//                      m->hdr.flags, pts, m->hdr.vers, dcid_str, scid_str,
+//                      tok_len ? " tok=" : "-", tok_str, m->hdr.len, m->hdr.nr);
             else
                 LOG_INF(
                       BLD BLU "RX" NRM " from=%s%s%s:%u len=%u%s%s 0x%02x=" BLU

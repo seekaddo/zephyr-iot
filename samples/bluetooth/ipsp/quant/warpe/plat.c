@@ -54,10 +54,10 @@
 
 #include <time.h>
 
-#include <zephyr/net/net_if.h>
-#include <zephyr/net/socket.h>
-#include <zephyr/posix/time.h>
-#include <zephyr/kernel.h>
+#include <net/net_if.h>
+#include <net/socket.h>
+#include <posix/time.h>
+#include <kernel.h>
 #endif
 
 #if defined(__linux__)

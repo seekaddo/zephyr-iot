@@ -37,9 +37,9 @@
 #ifdef __OPTIMIZE_SIZE__
 typedef uint_least64_t uint_t;
 typedef int_least64_t dint_t;
-#define PRIu PRIuLEAST64
-#define PRId PRIdLEAST64
-#define PRIx PRIxLEAST64
+#define PRIu PRIu64
+#define PRId PRIu64
+#define PRIx PRIu64
 #else
 typedef uint_fast64_t uint_t;
 typedef int_fast64_t dint_t;

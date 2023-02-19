@@ -21,7 +21,7 @@
  */
 #include "aes-common.h"
 //todo: copy to contiki-ng
-#include <zephyr/net/net_core.h>
+#include <net/net_core.h>
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
 LOG_MODULE_REGISTER(aes128);
 

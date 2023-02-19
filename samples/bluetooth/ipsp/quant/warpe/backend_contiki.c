@@ -37,9 +37,9 @@
 #include <stdbool.h>
 #include <stdlib.h>
 // #include <sys/param.h>
-#include <zephyr/kernel.h>
-#include <zephyr/net/net_if.h>
-#include <zephyr/net/socket.h>
+#include <kernel.h>
+#include <net/net_if.h>
+#include <net/socket.h>
 
 #ifndef NDEBUG
 #include <string.h>
@@ -90,7 +90,7 @@ uint16_t backend_addr_cnt(void)
 ///
 void backend_init(struct w_engine *const w, const uint32_t nbufs)
 {
-	k_sem_init(&waitpkt_lock, 0, K_SEM_MAX_LIMIT);
+	k_sem_init(&waitpkt_lock, 0,UINT_MAX ); // K_SEM_MAX_LIMIT
 	w->have_ip6 = true;
 	w->mtu = NET_IPV6_MTU; // UIP_LINK_MTU;
 	w->mbps = UINT32_MAX;
@@ -210,14 +210,14 @@ void w_tx(struct w_sock *const s, struct w_iov_sq *const o)
 		//static uint8_t buf_tx[NET_IPV6_MTU+20];
 		//snprintf(buf_tx, v->len,"%s",v->buf);
 		//memset(buf_tx,45, 300);
-		LOG_INF("Now sending buffer of size (%d)", v->len);
+		//LOG_INF("Now sending buffer of size (%d)", v->len);
 
 		ret = net_context_sendto(tranx_conn.w->u6_rec.cntx,  v->buf,  v->len, &v->saddr,
 					 sizeof(struct sockaddr_in6),
 					 pkt_sent, K_NO_WAIT, NULL);
 
 		if (ret < 0) {
-			LOG_ERR("Cannot send data to peer (%d) %s", ret, strerror(ret));
+			LOG_ERR("Cannot send data to peer (%d)", ret);
 		}
 
 		/*if (unlikely(quic_sendto(&s->w->u6_rec, &v->saddr, v->buf, v->len) < 0))
@@ -226,22 +226,22 @@ void w_tx(struct w_sock *const s, struct w_iov_sq *const o)
 	};
 }
 
-int
-quic_sendto(struct net_rec *u6rec, struct sockaddr *dst_addr, uint8_t *buf_tx, uint16_t len)
-{
-	int ret;
-	ret = net_context_sendto(tranx_conn.w->u6_rec.cntx, buf_tx, len, dst_addr,
-						    sizeof(struct sockaddr_in6),
-				 pkt_sent, K_NO_WAIT, u6rec->user_data);
-	LOG_INF("UDP ret: %d dest: %s port: %d",
-		ret, net_sprint_addr(AF_INET6,(uint8_t *)&net_sin6(dst_addr)->sin6_addr),
-		ntohs(net_sin6(dst_addr)->sin6_port) );
-	if (ret < 0) {
-		LOG_ERR("Cannot send data to peer (%d)", ret);
-	}
-
-	return ret;
-}
+//int
+//quic_sendto(struct net_rec *u6rec, struct sockaddr *dst_addr, uint8_t *buf_tx, uint16_t len)
+//{
+//	int ret;
+//	ret = net_context_sendto(tranx_conn.w->u6_rec.cntx, buf_tx, len, dst_addr,
+//						    sizeof(struct sockaddr_in6),
+//				 pkt_sent, K_NO_WAIT, u6rec->user_data);
+//	LOG_INF("UDP ret: %d dest: %s port: %d",
+//		ret, net_sprint_addr(AF_INET6,(uint8_t *)&net_sin6(dst_addr)->sin6_addr),
+//		ntohs(net_sin6(dst_addr)->sin6_port) );
+//	if (ret < 0) {
+//		LOG_ERR("Cannot send data to peer (%d)", ret);
+//	}
+//
+//	return ret;
+//}
 
 extern uint32_t syncNewData;
 

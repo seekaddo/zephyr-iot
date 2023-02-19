@@ -34,6 +34,10 @@
 #include "quic.h"
 #include "tls.h"
 
+#include <zephyr/types.h>
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
+
 #ifndef NO_SRT_MATCHING
 #include "conn.h"
 #endif

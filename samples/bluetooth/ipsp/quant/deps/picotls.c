@@ -29,10 +29,10 @@
 #else
 //#include <arpa/inet.h>
 //#include <sys/time.h>
-#include <zephyr/net/net_if.h>
-#include <zephyr/net/socket.h>
-#include <zephyr/posix/time.h>
-#include <zephyr/posix/sys/time.h>
+#include <net/net_if.h>
+#include <net/socket.h>
+#include <posix/time.h>
+#include <posix/sys/time.h>
 #include <stdlib.h>
 
 #endif
