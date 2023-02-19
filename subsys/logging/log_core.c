@@ -173,7 +173,7 @@ static void detect_missed_strdup(struct log_msg *msg)
 			if (IS_ENABLED(CONFIG_ASSERT)) {
 				__ASSERT(0, ERR_MSG, idx, src_name, msg_str);
 			} else {
-				LOG_ERR(ERR_MSG, idx, src_name, msg_str);
+				//LOG_ERR(ERR_MSG, idx, src_name, msg_str);
 			}
 		}
 

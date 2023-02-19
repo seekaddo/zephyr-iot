@@ -20,6 +20,7 @@ extern char  *strcpy(char *_MLIBC_RESTRICT d, const char *_MLIBC_RESTRICT s);
 extern char  *strncpy(char *_MLIBC_RESTRICT d, const char *_MLIBC_RESTRICT s,
 		      size_t n);
 extern char  *strchr(const char *s, int c);
+extern char *strdup(const char *s);
 extern char  *strrchr(const char *s, int c);
 extern size_t strlen(const char *s);
 extern size_t strnlen(const char *s, size_t maxlen);

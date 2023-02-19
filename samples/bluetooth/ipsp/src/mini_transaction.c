@@ -54,8 +54,8 @@ void quic_transx(const char * const req, const char* peer )
 	  return ;
   }
 
-  net_ipv6_addr_copy_raw((uint8_t *)&net_sin6(&tranx_conn.p_addr)->sin6_addr,
-			 in6addr_my.s6_addr);
+  net_ipaddr_copy(&net_sin6(&tranx_conn.p_addr)->sin6_addr,
+			 &in6addr_my);
   net_sin6(&tranx_conn.p_addr)->sin6_family = AF_INET6;
   net_sin6(&tranx_conn.p_addr)->sin6_port = htons(4432); // default server port
 
@@ -82,7 +82,7 @@ void quic_transx(const char * const req, const char* peer )
 #endif
 
   static const struct q_conn_conf qcc = {
-      30, 0, 0, 0, 0,
+      60, 0, 0, 0, 0,
       0, 0, 0, 0,
       0, 0xff000000 + DRAFT_VERSION};
   LOG_INF("quic_etranx:  new transaction \n");
@@ -90,36 +90,36 @@ void quic_transx(const char * const req, const char* peer )
                            &o, &tranx_conn.s, true,
                            "hq-" DRAFT_VERSION_STRING, &qcc);
 
-do{
-	k_sleep(K_SECONDS(70));
-} while (1);
+//do{
+//	k_sleep(K_SECONDS(70));
+//} while (1);
 
   uint16_t cnt = 0;
   while (1)
   {
 
 	  if (tranx_conn.c) {
-		  LOG_DBG("==============Get Response================================");
+		  LOG_INF("======Get Response==========");
 		  struct w_iov_sq i = w_iov_sq_initializer(i);
 		  q_read_stream(tranx_conn.s, &i, true);
 		  const uint16_t len = w_iov_sq_len(&i);
 		  LOG_INF("retrieved %" PRIu32 " bytes", len);
 		  struct w_iov *const sv = sq_first(&i);
-		  LOG_INF("Payload %d bytes->\n%s", sv->len, sv->buf);
+		  LOG_INF("----------Payload %d bytes->\n%s", sv->len, sv->buf);
 
-		  LOG_DBG("==============Get Done================================");
+		  LOG_INF("=====Get Done=======");
 		  q_free(&i);
 		  q_free_stream(tranx_conn.s);
 		  if(cnt > 1)
 			  break ;
 
-		  LOG_DBG("==============Free Done================================");
+		  LOG_INF("====Free Done========");
 		  //sleep(4); // sleep for some time before new request
 
 		  //todo: here we sent a fresh new request, Using old connection but new stream
-		  LOG_DBG("==============New Stream Pointer ================================");
+		  LOG_INF("==============New Stream Pointer ================================");
 		  tranx_conn.s = q_rsv_stream(tranx_conn.c, true); // request a new stream
-		  LOG_DBG("==============New Stream Pointer Done ================================");
+		  LOG_INF("=====New Stream Pointer Done ===================");
 		  q_alloc(tranx_conn.w, &o, 0, AF_INET6, 512); // allocate memory for the stream
 		  struct w_iov * const vv = sq_first(&o);
 		  vv->len = sprintf((char *)vv->buf, "GET %s\r\n", tranx_conn.req);
@@ -133,7 +133,7 @@ do{
 		  break ;
 	  }
   }
-
+  LOG_INF("============Con Closed ============================");
   q_free(&o);
   q_close(tranx_conn.c, 0, "No connection");
 

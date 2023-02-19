@@ -156,8 +156,8 @@ static inline void init_app(void)
 	} while (0);
 
 	// string to ip addr
-	net_ipaddr_copy((uint8_t *)&net_sin6(&myAddr)->sin6_addr,
-			       in6addr_my.s6_addr);
+	net_ipaddr_copy(&net_sin6(&myAddr)->sin6_addr,
+			       &in6addr_my);
 	net_sin6(&myAddr)->sin6_family = AF_INET6;
 	net_sin6(&myAddr)->sin6_port = htons(MY_PORT); // default server port
 
@@ -264,8 +264,7 @@ static void quic_recv(struct net_context *context,
 {
 	// prepare data for the quick socket receive to pull all pkt details and buffer.
 	//tranx_conn.w->u6_rec->src_port = proto_hdr->udp->src_port;
-	net_ipv6_addr_copy_raw((uint8_t *)&net_sin6(&tranx_conn.w->u6_rec.src_addr)->sin6_addr,
-			       ip_hdr->ipv6->src);
+	net_ipaddr_copy(&net_sin6(&tranx_conn.w->u6_rec.src_addr)->sin6_addr, &ip_hdr->ipv6->src);
 	net_sin6(&tranx_conn.w->u6_rec.src_addr)->sin6_family = AF_INET6;
 	net_sin6(&tranx_conn.w->u6_rec.src_addr)->sin6_port = proto_hdr->udp->src_port;
 	tranx_conn.w->u6_rec.pkt = pkt;
