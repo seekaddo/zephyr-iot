@@ -133,7 +133,7 @@ void quic_transx(const char * const req, const char* peer )
 		  break ;
 	  }
   }
-  LOG_INF("============Con Closed ============================");
+  LOG_INF("====Con Closed ========");
   q_free(&o);
   q_close(tranx_conn.c, 0, "No connection");
 
